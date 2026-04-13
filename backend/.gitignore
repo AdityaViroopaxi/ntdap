@@ -1,0 +1,10 @@
+# Sensitive environment variables
+.env
+
+# Python specific
+__pycache__/
+*.pyc
+
+# Project specific folders
+uploads/
+results/

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Visualizations — NTDAP</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"/>
+  <link rel="stylesheet" href="shared.css"/>
+  <style>
+    .chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(500px,1fr));gap:20px}
+    @media(max-width:700px){.chart-grid{grid-template-columns:1fr}}
+    .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:border-color .2s}
+    .chart-card:hover{border-color:var(--accent)}
+    .chart-header{padding:16px 20px 0;display:flex;justify-content:space-between;align-items:center}
+    .chart-title{font-size:14px;font-weight:600;color:var(--text)}
+    .chart-badge{font-size:11px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 8px}
+    .chart-desc{padding:8px 20px 12px;font-size:12px;color:var(--muted);line-height:1.6}
+    .chart-img-wrap{padding:0 16px 16px}
+    .chart-img-wrap img{width:100%;border-radius:8px;display:block;border:1px solid var(--faint)}
+    .no-charts{padding:60px;text-align:center;color:var(--muted);font-size:14px}
+  </style>
+</head>
+<body>
+<div id="navMount"></div>
+<div class="page-wrap" id="content">
+  <div style="text-align:center;padding:80px;color:var(--muted)">Loading...</div>
+</div>
+<script src="nav.js"></script>
+<script>
+// ── Constants BEFORE boot ────────────────────────────────────────
+const API = "http://localhost:5000";
+
+const CHART_META = {
+  protocol_distribution: {
+    title: "Protocol Distribution",
+    desc:  "Bar chart of packet counts per protocol. A single dominant protocol is normal; unexpected protocols with high volume (e.g. ICMP flood) may indicate an attack.",
+    badge: "Bar Chart"
+  },
+  top_source_ips: {
+    title: "Top Source IP Addresses",
+    desc:  "Top 10 most active source IPs by packet count. A heavily dominant single IP may indicate a server, scanner, or misconfigured host.",
+    badge: "H-Bar Chart"
+  },
+  packet_size: {
+    title: "Packet Size Distribution",
+    desc:  "Histogram of packet sizes in bytes. The red dashed line marks the mean. A bimodal shape (two humps) often indicates mixed traffic — e.g. small ACKs alongside large data transfers.",
+    badge: "Histogram"
+  },
+  traffic_timeline: {
+    title: "Traffic Volume Over Time",
+    desc:  "Packets per time interval across the full capture. Orange = all traffic, red dashed = anomalous packets. Sharp spikes may indicate bursts, scans or flood attacks.",
+    badge: "Time Series"
+  },
+  top_ports: {
+    title: "Top Destination Ports",
+    desc:  "Most targeted destination ports. Common ports (80, 443, 53) are expected. High counts on ports 23 (Telnet), 3389 (RDP), or 445 (SMB) are security red flags.",
+    badge: "Bar Chart"
+  },
+  anomaly_scatter: {
+    title: "Anomaly Detection — Size vs TTL",
+    desc:  "Scatter plot of packet size vs TTL. Blue = normal packets, red = anomalies flagged by Isolation Forest. Clusters of red dots far from the main group indicate unusual traffic behaviour.",
+    badge: "Scatter Plot"
+  }
+};
+
+// ── Boot ─────────────────────────────────────────────────────────
+document.getElementById("navMount").innerHTML = renderNav("charts");
+const data = getResult();
+if (data) buildPage(data);
+
+// ── Builder ──────────────────────────────────────────────────────
+function buildPage(data) {
+  let html = `
+    <div class="page-header">
+      <div class="file-badge">📄 ${data.filename}</div>
+      <h1>Visualizations</h1>
+      <p>All generated charts with explanations, plus a raw packet sample</p>
+    </div>`;
+
+  const charts = data.charts || {};
+  const chartEntries = Object.entries(charts);
+
+  if (chartEntries.length === 0) {
+    html += `<div class="no-charts">⚠️ No charts were generated — this can happen with very small captures (fewer than 10 packets).</div>`;
+  } else {
+    html += `<div class="chart-grid">`;
+    chartEntries.forEach(([key, url]) => {
+      const meta = CHART_META[key] || { title: key, desc: "Network traffic visualization.", badge: "Chart" };
+      html += `<div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">${meta.title}</span>
+          <span class="chart-badge">${meta.badge}</span>
+        </div>
+        <div class="chart-desc">${meta.desc}</div>
+        <div class="chart-img-wrap">
+          <img src="${API}${url}" alt="${meta.title}" loading="lazy"
+               onerror="this.parentElement.innerHTML='<div class=no-charts style=padding:32px>Image not available — check backend server is running.</div>'"/>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  // ── Packet sample table ───────────────────────────────────────
+  const sample = data.packet_sample || [];
+  if (sample.length > 0) {
+    html += `<div class="section-head" style="margin-top:32px">📋 Packet Sample — First ${sample.length} Packets</div>`;
+    html += `<div class="table-wrap"><table>
+      <tr>
+        <th>#</th><th>Protocol</th><th>Source IP</th><th>Dst IP</th>
+        <th>Src Port</th><th>Dst Port</th><th>Size</th><th>TTL</th><th>TCP Flags</th>
+      </tr>`;
+    sample.forEach(p => {
+      html += `<tr>
+        <td class="mono" style="color:var(--muted)">${p.packet_number}</td>
+        <td><span class="badge blue">${p.protocol || "—"}</span></td>
+        <td class="mono">${p.src_ip || "—"}</td>
+        <td class="mono">${p.dst_ip || "—"}</td>
+        <td class="mono" style="color:var(--muted)">${p.src_port || "—"}</td>
+        <td class="mono" style="color:var(--accent)">${p.dst_port || "—"}</td>
+        <td class="mono">${p.packet_length} B</td>
+        <td class="mono" style="color:var(--muted)">${p.ttl || "—"}</td>
+        <td class="mono" style="color:var(--muted)">${p.tcp_flags || "—"}</td>
+      </tr>`;
+    });
+    html += `</table></div>`;
+  }
+
+  html += navRow("result_security.html","← Security","result_ai.html","AI Assistant →");
+  document.getElementById("content").innerHTML = html;
+}
+
+function navRow(ph, pl, nh, nl) {
+  return `<div style="display:flex;gap:12px;justify-content:space-between;margin-top:32px;border-top:1px solid var(--border);padding-top:24px">
+    <a href="${ph}" style="border:1px solid var(--border);color:var(--text);padding:10px 20px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none">${pl}</a>
+    <a href="${nh}" style="background:var(--accent);color:#000;padding:10px 24px;border-radius:8px;font-weight:700;font-size:14px;text-decoration:none">${nl}</a>
+  </div>`;
+}
+</script>
+</body>
+</html>

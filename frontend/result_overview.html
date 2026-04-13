@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Overview — NTDAP</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"/>
+  <link rel="stylesheet" href="shared.css"/>
+  <style>
+    .hero-overview{display:grid;grid-template-columns:1fr auto;align-items:start;gap:32px;
+      background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px;margin-bottom:32px}
+    .hero-left h2{font-size:22px;font-weight:700;margin-bottom:4px}
+    .hero-left .sub{color:var(--muted);font-size:14px;margin-bottom:20px}
+    .hero-right{text-align:center}
+    .risk-circle{width:100px;height:100px;border-radius:50%;border:3px solid;display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .risk-num{font-size:28px;font-weight:700;font-family:'JetBrains Mono',monospace}
+    .risk-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+    .summary-text{font-size:15px;color:var(--muted);line-height:1.8;max-width:700px}
+    .key-findings{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:24px}
+    .finding{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px}
+    .finding-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+    .finding-value{font-size:16px;font-weight:600;font-family:'JetBrains Mono',monospace;color:var(--text)}
+    .finding-sub{font-size:11px;color:var(--muted);margin-top:3px}
+    .top-pairs-row{display:flex;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--faint);font-size:13px}
+    .top-pairs-row:last-child{border-bottom:none}
+    .arrow-icon{color:var(--muted);font-size:12px}
+    .count-chip{margin-left:auto;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--muted)}
+  </style>
+</head>
+<body>
+<div id="navMount"></div>
+<div class="page-wrap" id="content">
+  <div style="text-align:center;padding:80px;color:var(--muted)">Loading...</div>
+</div>
+
+<script src="nav.js"></script>
+<script>
+document.getElementById("navMount").innerHTML = renderNav("overview");
+const data = getResult();
+if (data) buildPage(data);
+
+function buildPage(data) {
+  const s = data.statistics;
+  const a = data.anomalies;
+  const i = data.interpretation;
+  const sev = i.severity || "NORMAL";
+  const sevColor = sev==="HIGH"?"#ef4444":sev==="MEDIUM"?"#f59e0b":"#10b981";
+
+  // Estimate risk score from anomaly %
+  const riskScore = Math.min(100, Math.round(
+    (a.anomaly_percentage||0)*3 + (a.port_scan_suspects?.length>0?25:0) + (a.stat_anomalies?.length>0?10:0)
+  ));
+
+  let html = `
+    <div class="page-header">
+      <div class="file-badge">📄 ${data.filename}</div>
+      <h1>Analysis Overview</h1>
+      <p>Complete summary of your network capture analysis</p>
+    </div>
+
+    <div class="hero-overview">
+      <div class="hero-left">
+        <h2>Capture Analysis Complete</h2>
+        <div class="sub">${new Date().toLocaleString()}</div>
+        <div class="severity-chip ${sev}" style="margin-bottom:16px">
+          ${sev==="HIGH"?"🔴":sev==="MEDIUM"?"🟡":"🟢"} Severity: ${sev}
+        </div>
+        <p class="summary-text">${i.summary||"—"}</p>
+      </div>
+      <div class="hero-right">
+        <div class="risk-circle" style="border-color:${sevColor}">
+          <div class="risk-num" style="color:${sevColor}">${riskScore}</div>
+          <div class="risk-lbl">Risk Score</div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px">out of 100</div>
+      </div>
+    </div>`;
+
+  // Stat grid
+  html += `<div class="section-head">📊 Key Metrics</div>`;
+  html += `<div class="stat-grid">`;
+  html += statCard("Total Packets", fmt(s.total_packets), "accent");
+  html += statCard("Total Data", fmtBytes(s.total_bytes), "accent");
+  html += statCard("Duration", (s.capture_duration_seconds||0)+"s");
+  html += statCard("Packets/sec", s.packets_per_second||"—");
+  html += statCard("Avg Packet", (s.avg_packet_size||0)+" B");
+  html += statCard("Top Protocol", s.most_common_protocol||"—");
+  html += statCard("Unique Src IPs", fmt(s.unique_src_ips), sev==="HIGH"?"red":"");
+  html += statCard("Anomalies", fmt(a.anomaly_count), a.anomaly_count>0?"red":"green");
+  html += `</div>`;
+
+  // Anomaly summary
+  html += `<div class="section-head">🤖 Anomaly Summary</div>`;
+  if (a.port_scan_suspects?.length > 0) {
+    a.port_scan_suspects.forEach(ps => {
+      html += `<div class="alert danger"><span class="alert-icon">🚨</span>
+        <div><strong>Port Scan Detected:</strong> IP <code class="mono">${ps.src_ip}</code> targeted ${ps.unique_ports_hit} unique ports — possible reconnaissance activity.</div>
+      </div>`;
+    });
+  }
+  if (a.anomaly_count > 0) {
+    html += `<div class="alert ${sev==="HIGH"?"danger":sev==="MEDIUM"?"warn":"info"}">
+      <span class="alert-icon">${sev==="HIGH"?"⚠️":"ℹ️"}</span>
+      <div>${i.anomaly_analysis}</div></div>`;
+  } else {
+    html += `<div class="alert success"><span class="alert-icon">✅</span><div>No anomalies detected. Traffic appears normal.</div></div>`;
+  }
+
+  // Recommendation
+  html += `<div class="section-head">💡 Recommendation</div>`;
+  html += `<div class="alert ${sev==="HIGH"?"danger":"success"}">
+    <span class="alert-icon">💡</span>
+    <div>${i.recommendation||"No immediate action required."}</div></div>`;
+
+  // Interpretation cards
+  html += `<div class="section-head">🔍 Interpretation</div>`;
+  html += `<div class="interp-grid">`;
+  if (i.protocol_breakdown) html += interpCard("Protocol Breakdown", i.protocol_breakdown);
+  if (i.packet_size_analysis) html += interpCard("Packet Size Analysis", i.packet_size_analysis);
+  if (i.network_type) html += interpCard("Network Type", i.network_type);
+  if (i.port_scan_warning) html += interpCard("⚠️ Port Scan Warning", i.port_scan_warning);
+  html += `</div>`;
+
+  // Top pairs
+  if (s.top_pairs?.length > 0) {
+    html += `<div class="section-head">🔗 Top Communication Pairs</div>`;
+    html += `<div class="table-wrap"><table>
+      <tr><th>Source IP</th><th>→</th><th>Destination IP</th><th>Packets</th></tr>`;
+    s.top_pairs.forEach(p => {
+      html += `<tr>
+        <td class="mono">${p.src}</td>
+        <td style="color:var(--muted)">→</td>
+        <td class="mono">${p.dst}</td>
+        <td class="mono" style="color:var(--accent)">${fmt(p.count)}</td>
+      </tr>`;
+    });
+    html += `</table></div>`;
+  }
+
+  // Navigation bar at bottom
+  html += `<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:32px;border-top:1px solid var(--border);padding-top:24px">
+    <a href="result_traffic.html" style="background:var(--accent);color:#000;padding:10px 24px;border-radius:8px;font-weight:700;font-size:14px;text-decoration:none">
+      Next: Traffic Analysis →
+    </a>
+  </div>`;
+
+  document.getElementById("content").innerHTML = html;
+}
+
+function statCard(label, value, cls="") {
+  return `<div class="stat-card ${cls}">
+    <div class="stat-label">${label}</div>
+    <div class="stat-value">${value}</div>
+  </div>`;
+}
+function interpCard(title, text) {
+  return `<div class="interp-card"><h4>${title}</h4><p>${text}</p></div>`;
+}
+</script>
+</body>
+</html>

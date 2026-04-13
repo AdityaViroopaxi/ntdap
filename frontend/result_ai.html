@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>AI Assistant — NTDAP</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"/>
+  <link rel="stylesheet" href="shared.css"/>
+  <style>
+    .ai-hero{background:linear-gradient(135deg,rgba(124,58,237,.1),rgba(0,212,255,.06));
+      border:1px solid rgba(124,58,237,.25);border-radius:16px;padding:32px;margin-bottom:32px;text-align:center}
+    .ai-hero h2{font-size:22px;font-weight:700;margin-bottom:8px}
+    .ai-hero p{color:var(--muted);font-size:14px;max-width:560px;margin:0 auto}
+    .question-box{display:flex;gap:12px;margin-bottom:24px}
+    .question-input{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:10px;
+      padding:14px 16px;font-size:14px;color:var(--text);font-family:'Space Grotesk',sans-serif;
+      resize:vertical;min-height:56px;transition:border-color .2s;outline:none}
+    .question-input:focus{border-color:var(--accent)}
+    .question-input::placeholder{color:var(--muted)}
+    .ask-btn{background:linear-gradient(135deg,var(--accent2),var(--accent));color:#fff;border:none;
+      border-radius:10px;padding:14px 24px;font-size:14px;font-weight:700;font-family:'Space Grotesk',sans-serif;
+      cursor:pointer;white-space:nowrap;align-self:flex-start;transition:all .2s;display:flex;align-items:center;gap:8px}
+    .ask-btn:disabled{background:var(--faint);color:var(--muted);cursor:not-allowed}
+    .ask-btn:not(:disabled):hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(124,58,237,.35)}
+    .presets{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+    .preset-btn{background:var(--surface);border:1px solid var(--border);border-radius:100px;
+      padding:6px 14px;font-size:12px;color:var(--muted);cursor:pointer;transition:all .2s;font-family:'Space Grotesk',sans-serif}
+    .preset-btn:hover{border-color:var(--accent2);color:var(--text)}
+    .ai-status{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px;margin-bottom:16px}
+    .ai-response{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;
+      font-size:14px;line-height:1.9;color:var(--muted);display:none;max-height:700px;overflow-y:auto}
+    .ai-response.show{display:block}
+    .ai-response h1,.ai-response h2,.ai-response h3{color:var(--text);margin:20px 0 8px;font-size:15px;font-weight:600}
+    .ai-response h1:first-child,.ai-response h2:first-child{margin-top:0}
+    .ai-response strong,.ai-response b{color:var(--text)}
+    .ai-response code{font-family:'JetBrains Mono',monospace;background:var(--surface2);padding:1px 5px;border-radius:3px;font-size:12px;color:var(--accent)}
+    .ai-response ol,.ai-response ul{padding-left:20px;margin:8px 0}
+    .ai-response li{margin-bottom:4px;color:var(--muted)}
+    .ai-response hr{border:none;border-top:1px solid var(--border);margin:16px 0}
+    .auto-report-btn{width:100%;padding:16px;background:var(--surface);border:1px solid var(--border);
+      border-radius:12px;color:var(--text);font-size:14px;font-weight:600;font-family:'Space Grotesk',sans-serif;
+      cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:all .2s;margin-bottom:20px}
+    .auto-report-btn:hover{border-color:var(--accent2);color:var(--accent)}
+    .history{margin-top:24px}
+    .history-item{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px}
+    .history-q{font-size:13px;color:var(--accent);margin-bottom:8px;font-weight:600}
+    .history-a{font-size:13px;color:var(--muted);line-height:1.7;max-height:120px;overflow:hidden;position:relative}
+    .history-a::after{content:'';position:absolute;bottom:0;left:0;right:0;height:40px;background:linear-gradient(transparent,var(--surface2))}
+  </style>
+</head>
+<body>
+<div id="navMount"></div>
+<div class="page-wrap">
+  <div class="page-header">
+    <div class="file-badge" id="fileBadge">📄 —</div>
+    <h1>✨ AI Security Assistant</h1>
+    <p>Ask Gemini AI anything about your network traffic capture</p>
+  </div>
+
+  <div class="ai-hero">
+    <h2>🤖 Powered by Gemini AI</h2>
+    <p>Get deep security insights, threat assessments, risk scores, and actionable recommendations — all explained in plain English by an expert AI analyst.</p>
+  </div>
+
+  <button class="auto-report-btn" onclick="runAutoReport()">
+    <span>✨</span> Generate Full AI Security Report
+    <span style="font-size:11px;color:var(--muted);font-weight:400">(No question needed — full analysis)</span>
+  </button>
+
+  <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Or ask a specific question:</div>
+
+  <div class="presets">
+    <button class="preset-btn" onclick="setQ('What are the biggest security risks in this traffic?')">Security risks</button>
+    <button class="preset-btn" onclick="setQ('Is this traffic from a port scan or DDoS?')">Port scan / DDoS?</button>
+    <button class="preset-btn" onclick="setQ('Explain the anomalies in plain English')">Explain anomalies</button>
+    <button class="preset-btn" onclick="setQ('What protocols are concerning and why?')">Protocol concerns</button>
+    <button class="preset-btn" onclick="setQ('Give me a risk score from 0 to 100 with justification')">Risk score</button>
+    <button class="preset-btn" onclick="setQ('What should I block or monitor?')">Block/monitor what?</button>
+    <button class="preset-btn" onclick="setQ('Is this traffic normal for a corporate network?')">Normal traffic?</button>
+    <button class="preset-btn" onclick="setQ('Summarize this capture for my manager')">Manager summary</button>
+  </div>
+
+  <div class="question-box">
+    <textarea class="question-input" id="questionInput" rows="2" placeholder="e.g. What are the biggest threats in this traffic?"></textarea>
+    <button class="ask-btn" id="askBtn" onclick="askAI()">
+      <span>✨</span> Ask AI
+    </button>
+  </div>
+
+  <div class="ai-status" id="aiStatus" style="display:none">
+    <div class="spinner"></div>
+    <span>Gemini AI is analyzing your traffic...</span>
+  </div>
+
+  <div class="ai-response" id="aiResponse"></div>
+
+  <div class="history" id="historyWrap" style="display:none">
+    <div class="section-head">🗂️ Previous Questions</div>
+    <div id="historyList"></div>
+  </div>
+
+  <div style="display:flex;gap:12px;justify-content:flex-start;margin-top:32px;border-top:1px solid var(--border);padding-top:24px">
+    <a href="result_charts.html" style="border:1px solid var(--border);color:var(--text);padding:10px 20px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none">← Visualizations</a>
+    <a href="result_overview.html" style="border:1px solid var(--border);color:var(--text);padding:10px 20px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none">Back to Overview</a>
+    <a href="upload.html" style="background:var(--accent);color:#000;padding:10px 24px;border-radius:8px;font-weight:700;font-size:14px;text-decoration:none;margin-left:auto">+ New Analysis</a>
+  </div>
+</div>
+
+<script src="nav.js"></script>
+<script>
+const API = "http://localhost:5000";
+document.getElementById("navMount").innerHTML = renderNav("ai");
+
+const data = getResult();
+if (data) {
+  document.getElementById("fileBadge").textContent = "📄 " + data.filename;
+}
+
+const history = [];
+
+function setQ(q) {
+  document.getElementById("questionInput").value = q;
+  document.getElementById("questionInput").focus();
+}
+
+async function runAutoReport() {
+  await askAI("");
+}
+
+async function askAI(questionOverride) {
+  if (!data) return;
+
+  const question = questionOverride !== undefined ? questionOverride
+    : document.getElementById("questionInput").value.trim();
+
+  document.getElementById("askBtn").disabled = true;
+  document.getElementById("aiStatus").style.display = "flex";
+  document.getElementById("aiResponse").classList.remove("show");
+
+  try {
+    const resp = await fetch(API + "/ai-analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        statistics:    data.statistics,
+        anomalies:     data.anomalies,
+        interpretation: data.interpretation,
+        packet_sample: data.packet_sample || [],
+        question:      question
+      })
+    });
+
+    const result = await resp.json();
+    document.getElementById("aiStatus").style.display = "none";
+    document.getElementById("askBtn").disabled = false;
+
+    if (!result.success) {
+      showAIError(result.error || "AI analysis failed.");
+      return;
+    }
+
+    const formatted = formatMarkdown(result.analysis);
+    const responseEl = document.getElementById("aiResponse");
+    responseEl.innerHTML = formatted;
+    responseEl.classList.add("show");
+
+    // Save to history
+    if (question) {
+      history.unshift({ q: question, a: result.analysis });
+      renderHistory();
+    }
+
+    // Clear input
+    document.getElementById("questionInput").value = "";
+
+    // Scroll to response
+    responseEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+  } catch(err) {
+    document.getElementById("aiStatus").style.display = "none";
+    document.getElementById("askBtn").disabled = false;
+    showAIError("Cannot connect to backend. Is the Flask server running on port 5000?");
+  }
+}
+
+function showAIError(msg) {
+  const el = document.getElementById("aiResponse");
+  el.innerHTML = `<div class="alert danger"><span class="alert-icon">⚠️</span><div>${msg}</div></div>`;
+  el.classList.add("show");
+}
+
+function formatMarkdown(text) {
+  return text
+    .replace(/^#{1,3}\s+(.+)$/gm, '<h3>$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/^(\d+)\.\s+(.+)$/gm, '<li>$2</li>')
+    .replace(/(<li>[\s\S]+?<\/li>)/g, '<ol>$1</ol>')
+    .replace(/<\/ol>\s*<ol>/g, '')
+    .replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>')
+    .replace(/---/g, '<hr/>')
+    .replace(/\n\n/g, '<br/><br/>')
+    .replace(/\n/g, '<br/>');
+}
+
+function renderHistory() {
+  if (history.length === 0) return;
+  document.getElementById("historyWrap").style.display = "block";
+  document.getElementById("historyList").innerHTML = history.map((h, idx) => `
+    <div class="history-item">
+      <div class="history-q">Q: ${h.q}</div>
+      <div class="history-a">${formatMarkdown(h.a.substring(0, 300))}...</div>
+    </div>`
+  ).join("");
+}
+
+// Allow Ctrl+Enter to submit
+document.getElementById("questionInput").addEventListener("keydown", e => {
+  if (e.key === "Enter" && e.ctrlKey) { e.preventDefault(); askAI(); }
+});
+</script>
+</body>
+</html>

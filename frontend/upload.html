@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Upload — NTDAP</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"/>
+  <style>
+    :root{--bg:#030712;--surface:#0d1117;--surface2:#161b22;--border:#21262d;
+      --accent:#00d4ff;--accent2:#7c3aed;--accent3:#10b981;--danger:#ef4444;
+      --warn:#f59e0b;--text:#e6edf3;--muted:#8b949e;--faint:#30363d;}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Space Grotesk',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    body::before{content:'';position:fixed;inset:0;
+      background-image:linear-gradient(var(--faint) 1px,transparent 1px),linear-gradient(90deg,var(--faint) 1px,transparent 1px);
+      background-size:60px 60px;opacity:.3;pointer-events:none;z-index:0;}
+    nav{position:sticky;top:0;z-index:100;display:flex;justify-content:space-between;align-items:center;
+      padding:16px 48px;background:rgba(3,7,18,.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+    .nav-brand{display:flex;align-items:center;gap:10px}
+    .nav-logo{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
+    .nav-title{font-size:16px;font-weight:600}.nav-title span{color:var(--accent)}
+    .nav-back{color:var(--muted);text-decoration:none;font-size:14px;display:flex;align-items:center;gap:6px;transition:color .2s}
+    .nav-back:hover{color:var(--text)}
+
+    .page{position:relative;z-index:1;max-width:680px;margin:60px auto;padding:0 24px}
+    .page-header{margin-bottom:40px}
+    .page-header h1{font-size:32px;font-weight:700;letter-spacing:-.03em;margin-bottom:8px}
+    .page-header p{color:var(--muted);font-size:16px}
+
+    /* ── DROP ZONE ── */
+    .drop-zone{position:relative;border:2px dashed var(--border);border-radius:16px;padding:60px 40px;
+      text-align:center;background:var(--surface);transition:all .3s;cursor:pointer}
+    .drop-zone.drag-over{border-color:var(--accent);background:rgba(0,212,255,.04)}
+    .drop-zone.file-selected{border-color:var(--accent3);border-style:solid}
+    .drop-icon{font-size:48px;margin-bottom:16px;display:block}
+    .drop-title{font-size:18px;font-weight:600;margin-bottom:8px}
+    .drop-sub{color:var(--muted);font-size:14px;margin-bottom:24px}
+    .drop-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 24px;
+      border-radius:8px;font-size:14px;font-family:'Space Grotesk',sans-serif;cursor:pointer;transition:all .2s;font-weight:500}
+    .drop-btn:hover{border-color:var(--accent);color:var(--accent)}
+    #fileInput{display:none}
+    .file-info{display:none;align-items:center;gap:12px;background:rgba(16,185,129,.08);
+      border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:14px 18px;margin-top:16px;text-align:left}
+    .file-info.show{display:flex}
+    .file-name{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--accent3);flex:1}
+    .file-size{font-size:12px;color:var(--muted)}
+    .file-remove{background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;padding:0;line-height:1;transition:color .2s}
+    .file-remove:hover{color:var(--danger)}
+
+    /* ── ANALYZE BTN ── */
+    .analyze-btn{width:100%;background:var(--accent);color:#000;border:none;border-radius:12px;
+      padding:16px;font-size:16px;font-weight:700;font-family:'Space Grotesk',sans-serif;cursor:pointer;
+      margin-top:20px;transition:all .3s;display:flex;align-items:center;justify-content:center;gap:10px}
+    .analyze-btn:disabled{background:var(--faint);color:var(--muted);cursor:not-allowed}
+    .analyze-btn:not(:disabled):hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,212,255,.3)}
+
+    /* ── PROGRESS ── */
+    .progress-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px;margin-top:24px;display:none}
+    .progress-card.show{display:block}
+    .progress-title{font-size:14px;font-weight:600;color:var(--muted);margin-bottom:20px;letter-spacing:.05em;text-transform:uppercase}
+    .progress-bar-wrap{background:var(--surface2);border-radius:100px;height:4px;margin-bottom:24px;overflow:hidden}
+    .progress-bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:100px;width:0%;transition:width .5s}
+    .steps-list{display:flex;flex-direction:column;gap:8px}
+    .step-item{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--muted);transition:color .3s}
+    .step-item.active{color:var(--text)}
+    .step-item.done{color:var(--accent3)}
+    .step-dot{width:8px;height:8px;border-radius:50%;background:var(--faint);flex-shrink:0;transition:background .3s}
+    .step-item.active .step-dot{background:var(--accent);animation:blink 1s infinite}
+    .step-item.done .step-dot{background:var(--accent3)}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+    .step-check{font-size:14px;display:none}
+    .step-item.done .step-check{display:inline}
+    .step-item.done .step-dot{display:none}
+
+    /* ── ERROR ── */
+    .error-card{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:12px;
+      padding:20px;margin-top:20px;display:none;color:var(--danger);font-size:14px;line-height:1.6}
+    .error-card.show{display:block}
+
+    /* ── FORMATS INFO ── */
+    .formats{display:flex;gap:8px;flex-wrap:wrap;margin-top:24px}
+    .fmt-tag{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 10px;
+      font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--muted)}
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">
+    <div class="nav-logo">🔬</div>
+    <span class="nav-title">NT<span>DAP</span></span>
+  </div>
+  <a href="index.html" class="nav-back">← Back to Home</a>
+</nav>
+
+<div class="page">
+  <div class="page-header">
+    <h1>Upload PCAP File</h1>
+    <p>Select a network capture file to begin the full analysis pipeline.</p>
+  </div>
+
+  <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+    <span class="drop-icon">📡</span>
+    <div class="drop-title">Drop your PCAP file here</div>
+    <div class="drop-sub">or click to browse your computer</div>
+    <button class="drop-btn" onclick="event.stopPropagation();document.getElementById('fileInput').click()">Choose File</button>
+    <input type="file" id="fileInput" accept=".pcap,.pcapng,.cap"/>
+  </div>
+
+  <div class="file-info" id="fileInfo">
+    <span style="font-size:20px">📄</span>
+    <div class="file-name" id="fileName">—</div>
+    <span class="file-size" id="fileSize">—</span>
+    <button class="file-remove" onclick="clearFile()">✕</button>
+  </div>
+
+  <div class="formats">
+    <span style="font-size:12px;color:var(--muted);align-self:center">Accepted:</span>
+    <span class="fmt-tag">.pcap</span>
+    <span class="fmt-tag">.pcapng</span>
+    <span class="fmt-tag">.cap</span>
+  </div>
+
+  <button class="analyze-btn" id="analyzeBtn" disabled onclick="runAnalysis()">
+    <span>⚡</span> Analyze Traffic
+  </button>
+
+  <div class="progress-card" id="progressCard">
+    <div class="progress-title">Analysis in Progress</div>
+    <div class="progress-bar-wrap"><div class="progress-bar" id="progressBar"></div></div>
+    <div class="steps-list" id="stepsList"></div>
+  </div>
+
+  <div class="error-card" id="errorCard"></div>
+</div>
+
+<script>
+const STEPS = [
+  "Uploading PCAP file to server",
+  "Parsing packets with Scapy",
+  "Cleaning and normalizing data",
+  "Running EDA — computing statistics",
+  "Running ML anomaly detection (Isolation Forest + IQR)",
+  "Generating 6 visualization charts",
+  "Writing traffic interpretation",
+];
+
+const dropZone = document.getElementById("dropZone");
+const fileInput = document.getElementById("fileInput");
+let currentFile = null;
+
+// Drag & drop
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("drag-over");
+  const f = e.dataTransfer.files[0];
+  if (f) setFile(f);
+});
+
+fileInput.addEventListener("change", () => {
+  if (fileInput.files[0]) setFile(fileInput.files[0]);
+});
+
+function setFile(f) {
+  currentFile = f;
+  document.getElementById("fileName").textContent = f.name;
+  document.getElementById("fileSize").textContent = fmtBytes(f.size);
+  document.getElementById("fileInfo").classList.add("show");
+  dropZone.classList.add("file-selected");
+  document.getElementById("analyzeBtn").disabled = false;
+  document.getElementById("errorCard").classList.remove("show");
+}
+
+function clearFile() {
+  currentFile = null;
+  fileInput.value = "";
+  document.getElementById("fileInfo").classList.remove("show");
+  dropZone.classList.remove("file-selected");
+  document.getElementById("analyzeBtn").disabled = true;
+}
+
+function buildSteps() {
+  const list = document.getElementById("stepsList");
+  list.innerHTML = STEPS.map((s, i) =>
+    `<div class="step-item" id="step-${i}">
+       <span class="step-dot"></span>
+       <span class="step-check">✓</span>
+       <span>${s}</span>
+     </div>`
+  ).join("");
+}
+
+function setStep(i) {
+  STEPS.forEach((_, j) => {
+    const el = document.getElementById("step-"+j);
+    el.classList.remove("active","done");
+    if (j < i) el.classList.add("done");
+    else if (j === i) el.classList.add("active");
+  });
+  document.getElementById("progressBar").style.width = `${Math.min(100, (i/STEPS.length)*100)}%`;
+}
+
+async function runAnalysis() {
+  if (!currentFile) return;
+  document.getElementById("analyzeBtn").disabled = true;
+  document.getElementById("errorCard").classList.remove("show");
+  document.getElementById("progressCard").classList.add("show");
+  buildSteps();
+  setStep(0);
+
+  // Simulate step progression during upload
+  let stepTimer = 0;
+  const advance = (step) => { setTimeout(() => setStep(step), stepTimer += 1200); };
+  for (let i = 1; i < STEPS.length - 1; i++) advance(i);
+
+  const formData = new FormData();
+  formData.append("file", currentFile);
+
+  try {
+    const resp = await fetch("http://localhost:5000/upload", { method:"POST", body: formData });
+    const data = await resp.json();
+
+    document.getElementById("progressBar").style.width = "100%";
+    setStep(STEPS.length);
+
+    if (!resp.ok || !data.success) {
+      showError(data.error || "Analysis failed. Check backend logs.");
+      document.getElementById("analyzeBtn").disabled = false;
+      return;
+    }
+
+    sessionStorage.setItem("ntdap_result", JSON.stringify(data));
+    setTimeout(() => { window.location.href = "result_overview.html"; }, 600);
+
+  } catch(err) {
+    showError("Cannot connect to backend. Make sure the Flask server is running on port 5000.");
+    document.getElementById("analyzeBtn").disabled = false;
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById("errorCard");
+  el.textContent = "⚠ " + msg;
+  el.classList.add("show");
+  document.getElementById("progressCard").classList.remove("show");
+}
+
+function fmtBytes(b) {
+  if (b < 1024) return b + " B";
+  if (b < 1024*1024) return (b/1024).toFixed(1) + " KB";
+  return (b/1024/1024).toFixed(2) + " MB";
+}
+</script>
+</body>
+</html>

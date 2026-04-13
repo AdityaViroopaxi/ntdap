@@ -1,0 +1,115 @@
+NTDAP Backend — Technical Overview
+
+1. Entry Point — main.py
+
+Runs a Flask web server on port 5000
+Has 3 routes:
+
+GET / — health check
+POST /upload — receives PCAP file, triggers the full pipeline
+GET /results/<file> — serves chart images back to the frontend
+
+
+Calls each module in order and bundles their output into a single JSON response
+Any error in the pipeline is caught and returned as a clean error message
+
+
+2. parser.py — Packet Extraction
+
+Uses Scapy to open and read the PCAP file
+Loops through every packet and extracts:
+
+Network layer — src/dst IP, TTL, header length
+Transport layer — src/dst port, TCP flags, window size
+Protocol — identified by port number (HTTP=80, DNS=53, SSH=22 etc.)
+Derived features — inter-arrival time, payload ratio, private IP flags
+
+
+Returns a Pandas DataFrame where each row = one packet, each column = one feature
+
+
+3. cleaner.py — Data Preprocessing
+
+Removes duplicate packets (matched by timestamp + size)
+Fills missing IPs with "Unknown" instead of dropping the row — preserves full packet count
+Fills missing numeric fields (ports, TTL etc.) with 0
+Removes only zero-length packets (genuinely broken)
+Resets the DataFrame index after cleaning
+
+
+4. eda.py — Exploratory Data Analysis
+
+Calculates summary statistics:
+
+Total packets, total bytes, duration, packets per second
+Average, min, max packet size
+
+
+Calculates traffic breakdown:
+
+Protocol distribution
+Top 5 source IPs, destination IPs, destination ports
+Top communication pairs (busiest src→dst combinations)
+Private vs public IP counts
+
+
+Returns a plain Python dictionary of all stats
+
+
+5. analyzer.py — Machine Learning
+
+Runs two independent detection methods:
+
+Isolation Forest (scikit-learn)
+
+Trains on 10 numeric features (packet size, TTL, ports, inter-arrival time etc.)
+Labels each packet: 1 = normal, -1 = anomaly
+Expects ~5% anomaly rate (contamination=0.05)
+
+
+IQR Statistical Detection
+
+Calculates Q1, Q3, and IQR for key columns
+Flags values outside Q1 − 1.5×IQR and Q3 + 1.5×IQR as outliers
+
+
+
+
+Also runs port scan detection
+
+Flags any source IP that hits more than 15 unique destination ports
+
+
+Returns anomaly count, percentage, flagged packet table, IQR findings, and port scan suspects
+
+
+6. visualizer.py — Chart Generation
+
+Generates 6 charts using Matplotlib, saves each as a PNG in results/
+
+Protocol distribution — bar chart with count labels
+Top source IPs — horizontal bar chart
+Packet size histogram — with mean line overlay
+Traffic timeline — line chart with anomaly overlay in red
+Top destination ports — bar chart with count labels
+Anomaly scatter plot — packet size vs TTL, blue = normal, red = anomaly
+
+
+Returns a dictionary of chart names mapped to their file paths
+
+
+7. interpreter.py — Report Generation
+
+Takes the stats and anomaly results as input
+Builds plain-English sentences using if/else logic covering:
+
+Traffic summary (packet count, duration, top protocol)
+Protocol breakdown percentages
+Packet size assessment (small/mixed/large)
+Anomaly findings and severity
+Network type (internal vs external traffic)
+Port scan warnings if detected
+
+
+Assigns a severity level: NORMAL / MEDIUM / HIGH
+Returns a dictionary of text sections + severity + recommendation
