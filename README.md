@@ -1,5 +1,5 @@
 # NTDAP v2.0  
-## Network Traffic Detection and Analysis Platform with AI Integration
+## Network Traffic Data Analysis Platform with AI Integration
 
 ---
 
