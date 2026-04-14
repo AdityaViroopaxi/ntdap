@@ -1,129 +1,75 @@
-# NTDAP v2.0 — Network Traffic Data Analysis Platform
-
-A professional-grade PCAP analysis platform with **Gemini AI-powered** security insights, ML anomaly detection, and 5 detailed result pages.
+# NTDAP v2.0  
+## Network Traffic Detection and Analysis Platform with AI Integration
 
 ---
 
-## 🚀 How to Run
+## 1. Overview
 
-### Step 1 — Install Python dependencies
+NTDAP v2.0 is a modular backend system designed to analyze network packet capture (PCAP) files and generate structured insights using data processing, machine learning, and large language model integration.
 
-```bash
-cd ntdap
+The system transforms low-level packet data into high-level, actionable intelligence for network security analysis.
+
+---
+
+## 2. System Objectives
+
+- Automate network packet analysis
+- Detect anomalous traffic behavior using machine learning
+- Generate statistical and visual insights
+- Provide AI-driven security interpretation
+- Reduce manual dependency on traditional packet analysis tools
+
+---
+
+## 3. System Architecture
+
+PCAP Input → Parsing Layer → Data Cleaning Layer → Exploratory Data Analysis → Machine Learning → Visualization → Interpretation → AI Analysis → Output
+
+---
+
+## 4. Installation Guide
+
+### 4.1 Clone the Repository
+
+git clone <repository-url>
+cd ntdap/backend
+
+### 4.2 Create Virtual Environment
+
+python -m venv venv  
+venv\Scripts\activate
+
+### 4.3 Install Dependencies
+
 pip install -r requirements.txt
-```
 
-> On Linux/Mac use `pip3` if `pip` doesn't work.
+### 4.4 Environment Configuration
 
-### Step 2 — Add your Gemini API key
+Create `.env` file:
 
-Open `backend/main.py` and find this line near the top:
+GEMINI_API_KEY=your_api_key_here
 
-```python
-GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE"
-```
+### 4.5 Run the Server
 
-Replace it with your actual key:
-
-```python
-GEMINI_API_KEY = "AIza..."   # your key from aistudio.google.com
-```
-
-**Get a free Gemini API key at:** https://aistudio.google.com/app/apikey  
-(It's free — no credit card needed for Gemini Flash)
-
-### Step 3 — Start the Flask backend
-
-```bash
-cd backend
 python main.py
-```
 
-You should see:
-```
-Starting NTDAP v2.0 on http://localhost:5000
-```
-
-### Step 4 — Open the frontend
-
-Open `frontend/index.html` in your browser.
-
-```bash
-# macOS
-open frontend/index.html
-
-# Windows
-start frontend/index.html
-
-# Linux
-xdg-open frontend/index.html
-```
-
-Or serve with Python's built-in server:
-
-```bash
-cd frontend
-python -m http.server 8080
-# Visit: http://localhost:8080
-```
-
-### Step 5 — Analyze a PCAP file
-
-1. Click **"Upload a PCAP File"**
-2. Drop in a `.pcap`, `.pcapng` or `.cap` file
-3. Click **"Analyze Traffic"**
-4. Browse the 5 result pages — including the **AI Assistant** page
+Server runs at http://localhost:5000
 
 ---
 
-## 📂 Project Structure
+## 5. Workflow Summary
 
-```
-ntdap/
-├── backend/
-│   ├── main.py              ← Flask server + Gemini AI endpoint
-│   ├── modules/
-│   │   ├── parser.py        ← PCAP parsing (15+ features/packet)
-│   │   ├── cleaner.py       ← Data cleaning
-│   │   ├── eda.py           ← Statistics (20+ metrics)
-│   │   ├── analyzer.py      ← ML: Isolation Forest + IQR + port scan
-│   │   ├── visualizer.py    ← 6 chart types
-│   │   └── interpreter.py   ← Plain-English interpretation
-│   ├── uploads/             ← Uploaded PCAPs go here
-│   └── results/             ← Generated PNG charts go here
-│
-├── frontend/
-│   ├── index.html           ← Landing page
-│   ├── upload.html          ← Drag-and-drop upload
-│   ├── shared.css           ← Dark theme (shared)
-│   ├── nav.js               ← Navigation + helper functions
-│   ├── result_overview.html ← Page 1: Summary & severity
-│   ├── result_traffic.html  ← Page 2: Protocols, IPs, ports
-│   ├── result_security.html ← Page 3: Anomalies & threats
-│   ├── result_charts.html   ← Page 4: Charts & packet table
-│   └── result_ai.html       ← Page 5: Gemini AI assistant
-│
-├── demo pcaps/              ← Sample files to test with
-└── requirements.txt
-```
+1. Upload PCAP file  
+2. Parse packets into structured data  
+3. Clean dataset  
+4. Generate statistics  
+5. Detect anomalies using ML  
+6. Create visualizations  
+7. Generate interpretation  
+8. Produce AI report  
 
 ---
 
-## 📋 Result Pages
+## 6. Conclusion
 
-| # | Page | Content |
-|---|------|---------|
-| 1 | Overview | Severity badge, risk score, key stats, recommendation |
-| 2 | Traffic | Protocol bars, top IPs with labels, port risk table, communication pairs |
-| 3 | Security | Anomalous packet table, port scan alerts, IQR outliers, ML features |
-| 4 | Visualizations | All 6 charts with descriptions + 50-packet raw table |
-| 5 | AI Assistant | Ask Gemini anything about the traffic — full security report |
-
----
-
-## 🧪 Demo PCAPs
-
-Files in `demo pcaps/`:
-- `demo.pcap` — General mixed traffic (best starting point)
-- `divesh.pcapng` — Larger real-world capture
-- `udemy-lab*.pcapng` — Focused samples (DNS, DHCP, IPv6, etc.)
+NTDAP v2.0 converts raw packet data into actionable security insights using a structured pipeline of data processing, machine learning, and AI.
