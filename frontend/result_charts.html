@@ -2,138 +2,251 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Visualizations — NTDAP</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"/>
+  <title>Charts — NTDAP v3</title>
   <link rel="stylesheet" href="shared.css"/>
   <style>
-    .chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(500px,1fr));gap:20px}
-    @media(max-width:700px){.chart-grid{grid-template-columns:1fr}}
-    .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:border-color .2s}
-    .chart-card:hover{border-color:var(--accent)}
-    .chart-header{padding:16px 20px 0;display:flex;justify-content:space-between;align-items:center}
-    .chart-title{font-size:14px;font-weight:600;color:var(--text)}
-    .chart-badge{font-size:11px;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 8px}
-    .chart-desc{padding:8px 20px 12px;font-size:12px;color:var(--muted);line-height:1.6}
-    .chart-img-wrap{padding:0 16px 16px}
-    .chart-img-wrap img{width:100%;border-radius:8px;display:block;border:1px solid var(--faint)}
-    .no-charts{padding:60px;text-align:center;color:var(--muted);font-size:14px}
+    /* ── Uniform 2-column grid ─────────────────────────── */
+    .chart-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+    .chart-card.wide { grid-column: 1 / -1; }
+    @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
+
+    /* ── Card shell ────────────────────────────────────── */
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .chart-card:hover {
+      border-color: rgba(0,212,255,.35);
+      box-shadow: 0 0 24px rgba(0,212,255,.07);
+    }
+
+    /* ── Card header ───────────────────────────────────── */
+    .card-hdr {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 18px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -.01em;
+    }
+    .card-badge {
+      font-size: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--muted);
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      padding: 2px 8px;
+    }
+
+    /* ── Chart image ───────────────────────────────────── */
+    .card-img-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      padding: 0;
+    }
+    .card-img {
+      display: block;
+      width: 100%;
+      height: auto;
+      object-fit: contain;
+    }
+    .card-error {
+      padding: 40px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    /* ── Card footer / description ─────────────────────── */
+    .card-desc {
+      padding: 10px 18px;
+      font-size: 11.5px;
+      color: var(--muted);
+      line-height: 1.6;
+      border-top: 1px solid var(--border);
+      background: var(--surface2);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .card-save {
+      flex-shrink: 0;
+      font-size: 10.5px;
+      color: var(--muted);
+      text-decoration: none;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      padding: 3px 10px;
+      white-space: nowrap;
+      transition: color .15s, border-color .15s;
+    }
+    .card-save:hover { color: var(--accent); border-color: rgba(0,212,255,.4); }
+
+    /* ── Page meta ─────────────────────────────────────── */
+    .chart-count {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0,212,255,.07);
+      border: 1px solid rgba(0,212,255,.18);
+      border-radius: 6px;
+      padding: 5px 14px;
+      font-size: 12px;
+      color: var(--accent);
+      margin-bottom: 22px;
+    }
   </style>
 </head>
 <body>
 <div id="navMount"></div>
 <div class="page-wrap" id="content">
-  <div style="text-align:center;padding:80px;color:var(--muted)">Loading...</div>
+  <div style="text-align:center;padding:80px;color:var(--muted)">Loading…</div>
 </div>
 <script src="nav.js"></script>
 <script>
-// ── Constants BEFORE boot ────────────────────────────────────────
-const API = "http://localhost:5000";
+const token = localStorage.getItem("ntdap_token");
 
-const CHART_META = {
-  protocol_distribution: {
-    title: "Protocol Distribution",
-    desc:  "Bar chart of packet counts per protocol. A single dominant protocol is normal; unexpected protocols with high volume (e.g. ICMP flood) may indicate an attack.",
-    badge: "Bar Chart"
-  },
-  top_source_ips: {
-    title: "Top Source IP Addresses",
-    desc:  "Top 10 most active source IPs by packet count. A heavily dominant single IP may indicate a server, scanner, or misconfigured host.",
-    badge: "H-Bar Chart"
-  },
-  packet_size: {
-    title: "Packet Size Distribution",
-    desc:  "Histogram of packet sizes in bytes. The red dashed line marks the mean. A bimodal shape (two humps) often indicates mixed traffic — e.g. small ACKs alongside large data transfers.",
-    badge: "Histogram"
-  },
-  traffic_timeline: {
-    title: "Traffic Volume Over Time",
-    desc:  "Packets per time interval across the full capture. Orange = all traffic, red dashed = anomalous packets. Sharp spikes may indicate bursts, scans or flood attacks.",
-    badge: "Time Series"
-  },
-  top_ports: {
-    title: "Top Destination Ports",
-    desc:  "Most targeted destination ports. Common ports (80, 443, 53) are expected. High counts on ports 23 (Telnet), 3389 (RDP), or 445 (SMB) are security red flags.",
-    badge: "Bar Chart"
-  },
-  anomaly_scatter: {
-    title: "Anomaly Detection — Size vs TTL",
-    desc:  "Scatter plot of packet size vs TTL. Blue = normal packets, red = anomalies flagged by Isolation Forest. Clusters of red dots far from the main group indicate unusual traffic behaviour.",
-    badge: "Scatter Plot"
-  }
-};
-
-// ── Boot ─────────────────────────────────────────────────────────
-document.getElementById("navMount").innerHTML = renderNav("charts");
-const data = getResult();
-if (data) buildPage(data);
-
-// ── Builder ──────────────────────────────────────────────────────
-function buildPage(data) {
-  let html = `
-    <div class="page-header">
-      <div class="file-badge">📄 ${data.filename}</div>
-      <h1>Visualizations</h1>
-      <p>All generated charts with explanations, plus a raw packet sample</p>
-    </div>`;
-
-  const charts = data.charts || {};
-  const chartEntries = Object.entries(charts);
-
-  if (chartEntries.length === 0) {
-    html += `<div class="no-charts">⚠️ No charts were generated — this can happen with very small captures (fewer than 10 packets).</div>`;
-  } else {
-    html += `<div class="chart-grid">`;
-    chartEntries.forEach(([key, url]) => {
-      const meta = CHART_META[key] || { title: key, desc: "Network traffic visualization.", badge: "Chart" };
-      html += `<div class="chart-card">
-        <div class="chart-header">
-          <span class="chart-title">${meta.title}</span>
-          <span class="chart-badge">${meta.badge}</span>
-        </div>
-        <div class="chart-desc">${meta.desc}</div>
-        <div class="chart-img-wrap">
-          <img src="${API}${url}" alt="${meta.title}" loading="lazy"
-               onerror="this.parentElement.innerHTML='<div class=no-charts style=padding:32px>Image not available — check backend server is running.</div>'"/>
-        </div>
-      </div>`;
-    });
-    html += `</div>`;
-  }
-
-  // ── Packet sample table ───────────────────────────────────────
-  const sample = data.packet_sample || [];
-  if (sample.length > 0) {
-    html += `<div class="section-head" style="margin-top:32px">📋 Packet Sample — First ${sample.length} Packets</div>`;
-    html += `<div class="table-wrap"><table>
-      <tr>
-        <th>#</th><th>Protocol</th><th>Source IP</th><th>Dst IP</th>
-        <th>Src Port</th><th>Dst Port</th><th>Size</th><th>TTL</th><th>TCP Flags</th>
-      </tr>`;
-    sample.forEach(p => {
-      html += `<tr>
-        <td class="mono" style="color:var(--muted)">${p.packet_number}</td>
-        <td><span class="badge blue">${p.protocol || "—"}</span></td>
-        <td class="mono">${p.src_ip || "—"}</td>
-        <td class="mono">${p.dst_ip || "—"}</td>
-        <td class="mono" style="color:var(--muted)">${p.src_port || "—"}</td>
-        <td class="mono" style="color:var(--accent)">${p.dst_port || "—"}</td>
-        <td class="mono">${p.packet_length} B</td>
-        <td class="mono" style="color:var(--muted)">${p.ttl || "—"}</td>
-        <td class="mono" style="color:var(--muted)">${p.tcp_flags || "—"}</td>
-      </tr>`;
-    });
-    html += `</table></div>`;
-  }
-
-  html += navRow("result_security.html","← Security","result_ai.html","AI Assistant →");
-  document.getElementById("content").innerHTML = html;
+if (!token) {
+    window.location.href = "login.html";
 }
 
-function navRow(ph, pl, nh, nl) {
-  return `<div style="display:flex;gap:12px;justify-content:space-between;margin-top:32px;border-top:1px solid var(--border);padding-top:24px">
-    <a href="${ph}" style="border:1px solid var(--border);color:var(--text);padding:10px 20px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none">${pl}</a>
-    <a href="${nh}" style="background:var(--accent);color:#000;padding:10px 24px;border-radius:8px;font-weight:700;font-size:14px;text-decoration:none">${nl}</a>
-  </div>`;
+document.getElementById("navMount").innerHTML = renderNav("charts");
+
+/* Chart metadata — heatmap permanently removed */
+const CHART_META = {
+  protocol_distribution: {
+    title: "Protocol Distribution", type: "Donut + Bar", wide: true,
+    desc: "Packet share per protocol alongside absolute counts. Unexpected protocols at high volume may indicate exfiltration or C2 traffic."
+  },
+  traffic_timeline: {
+    title: "Traffic Volume Over Time", type: "Time Series", wide: true,
+    desc: "Packets per interval over the full capture. Blue = all traffic, red dashed = anomalies. Sharp spikes may indicate floods or scans."
+  },
+  top_source_ips: {
+    title: "Top Source IPs", type: "Horizontal Bar", wide: false,
+    desc: "Most active sources by packet count and traffic volume. A single dominant IP scanning broadly is a strong red flag."
+  },
+  anomaly_scatter: {
+    title: "Anomaly Scatter", type: "Scatter × 2", wide: false,
+    desc: "Packet Size vs TTL and IAT vs Payload Ratio. Blue = normal, red triangles = ML-flagged anomalies."
+  },
+  flow_analysis: {
+    title: "Flow Analysis", type: "Scatter + Bar", wide: false,
+    desc: "Per-flow volume vs packet count on log scale, plus top 10 highest-volume flows by KB transferred."
+  },
+  packet_size: {
+    title: "Packet Size Distribution", type: "Histogram", wide: false,
+    desc: "Normal vs anomalous packet sizes with mean and p95 markers. Bimodal shape suggests mixed traffic types."
+  },
+  top_ports: {
+    title: "Top Destination Ports", type: "Bar", wide: false,
+    desc: "Most targeted ports. Red = suspicious (Meterpreter, IRC-C2). High RDP / SMB / Telnet counts are red flags."
+  },
+  tcp_flags: {
+    title: "TCP Flag Distribution", type: "Bar", wide: false,
+    desc: "Breakdown of TCP control flags. High RST = rejections or scans. High SYN without ACK = possible SYN flood."
+  },
+  inter_arrival: {
+    title: "Inter-Arrival Time", type: "Histogram", wide: false,
+    desc: "Time gap between consecutive packets. Very low IAT = automated traffic. Regular spikes = potential beaconing."
+  },
+};
+
+function build(d) {
+  const charts = d.charts || {};
+  const count  = Object.keys(charts).length;
+
+  let h = `
+    <div class="page-header">
+      <div class="file-badge">📄 ${d.filename}</div>
+      <h1>Visualizations</h1>
+      <p>Dark-themed analysis charts from NTDAP v3.0</p>
+    </div>
+    <div class="chart-count">📊 ${count} chart${count !== 1 ? "s" : ""} generated</div>`;
+
+  if (count === 0) {
+    h += `<div class="alert-card warn"><span class="alert-icon">⚠️</span>
+      <div><div class="alert-title">No Charts Generated</div>
+      <div class="alert-body">This can happen with very small captures (&lt;10 packets) or if the backend visualizer encountered an error.</div></div>
+    </div>`;
+  } else {
+    /* Render in defined order: wide charts first, then half-width */
+    const ORDER = Object.keys(CHART_META);
+    const present = ORDER.filter(k => charts[k]);
+    const extra   = Object.keys(charts).filter(k => !CHART_META[k]);
+    const all     = [...present, ...extra];
+
+    h += `<div class="chart-grid">`;
+    all.forEach(key => {
+      const url  = charts[key];
+      const meta = CHART_META[key] || { title: key.replace(/_/g, " "), type: "Chart", wide: false, desc: "Network traffic visualization." };
+      h += `
+        <div class="chart-card${meta.wide ? " wide" : ""}">
+          <div class="card-hdr">
+            <span class="card-title">${meta.title}</span>
+            <span class="card-badge">${meta.type}</span>
+          </div>
+          <div class="card-img-wrap">
+            <img class="card-img" src="${url}" alt="${meta.title}" loading="lazy"
+                 onerror="this.closest('.card-img-wrap').innerHTML='<div class=card-error>⚠ Chart could not be rendered</div>'"/>
+          </div>
+          <div class="card-desc">
+            <span>${meta.desc}</span>
+            <a class="card-save" href="${url}" download="${key}.png">⬇ Save</a>
+          </div>
+        </div>`;
+    });
+    h += `</div>`;
+  }
+
+  h += navRow("result_security.html", "← Security", "result_packets.html", "Packets →");
+  document.getElementById("content").innerHTML = h;
+}
+
+const data = getResult();
+
+if (data) {
+    build(data);
+} else {
+    document.getElementById("content").innerHTML = `
+        <div class="empty-state" style="text-align:center;padding:80px;">
+            <h2>No analysis data found</h2>
+            <p style="color:var(--muted);margin-top:10px;">
+                Please upload and analyze a PCAP file first.
+            </p>
+            <br>
+            <a href="upload.html"
+               style="background:var(--accent);
+                      color:#000;
+                      padding:12px 25px;
+                      border-radius:8px;
+                      text-decoration:none;
+                      font-weight:bold;">
+               Upload PCAP →
+            </a>
+        </div>
+    `;
 }
 </script>
 </body>

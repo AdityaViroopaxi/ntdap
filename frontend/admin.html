@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Admin Dashboard — NTDAP v4</title>
+  <link rel="stylesheet" href="shared.css"/>
+  <style>
+    .page-wrap{max-width:1200px;margin:0 auto;padding:36px 24px 80px;position:relative;z-index:1}
+    .admin-header{background:linear-gradient(135deg,rgba(124,58,237,.12),rgba(0,212,255,.08));border:1px solid rgba(124,58,237,.3);border-radius:var(--radius-lg);padding:24px 28px;margin-bottom:28px;display:flex;align-items:center;gap:16px}
+    .admin-icon{font-size:36px}
+    .admin-header h1{font-size:22px;font-weight:800;margin-bottom:3px}
+    .admin-header p{font-size:13px;color:var(--muted)}
+    .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:32px}
+    .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+    .stat-card .stat-value{font-size:32px;font-weight:900;font-family:'JetBrains Mono',monospace;color:var(--accent)}
+    .stat-card .stat-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:6px}
+    .stat-card.danger .stat-value{color:var(--danger)}
+    .stat-card.warn .stat-value{color:var(--warn)}
+    .stat-card.green .stat-value{color:var(--accent3)}
+    .tab-nav{display:flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:5px;margin-bottom:24px;width:fit-content}
+    .anav-tab{padding:9px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;color:var(--muted);transition:all .2s;border:none;background:transparent;font-family:'Space Grotesk',sans-serif}
+    .anav-tab.active{background:var(--surface2);color:var(--text);box-shadow:0 2px 8px rgba(0,0,0,.3)}
+    .tab-panel{display:none}.tab-panel.active{display:block}
+    .section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+    .section-head h3{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px}
+    .section-head h3::before{content:'';display:block;width:3px;height:16px;background:var(--accent2);border-radius:2px}
+    .filter-row{display:flex;gap:10px;flex-wrap:wrap}
+    .filter-row select,.filter-row input{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px 12px;font-family:'Space Grotesk',sans-serif;font-size:13px;outline:none}
+    table.data-table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+    table.data-table th{background:var(--surface2);border-bottom:1px solid var(--border);padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+    table.data-table td{padding:11px 14px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle}
+    table.data-table tr:last-child td{border-bottom:none}
+    table.data-table tr:hover td{background:var(--surface2)}
+    .mono{font-family:'JetBrains Mono',monospace;font-size:12px}
+    .sev-chip{display:inline-block;border-radius:100px;padding:3px 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+    .sev-NORMAL{background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3)}
+    .sev-LOW{background:rgba(0,212,255,.12);color:#00d4ff;border:1px solid rgba(0,212,255,.3)}
+    .sev-MEDIUM{background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.3)}
+    .sev-HIGH{background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+    .sev-CRITICAL{background:rgba(255,59,59,.18);color:#ff3b3b;border:1px solid rgba(255,59,59,.4)}
+    .role-badge{display:inline-block;border-radius:100px;padding:3px 10px;font-size:11px;font-weight:700;text-transform:uppercase}
+    .role-admin{background:rgba(124,58,237,.18);color:#a78bfa;border:1px solid rgba(124,58,237,.3)}
+    .role-user{background:rgba(0,212,255,.1);color:#00d4ff;border:1px solid rgba(0,212,255,.2)}
+    .toggle-btn{border:none;border-radius:7px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Space Grotesk',sans-serif;transition:all .15s}
+    .toggle-btn.active{background:rgba(239,68,68,.1);color:var(--danger);border:1px solid rgba(239,68,68,.3)}
+    .toggle-btn.active:hover{background:rgba(239,68,68,.2)}
+    .toggle-btn.inactive{background:rgba(16,185,129,.1);color:var(--accent3);border:1px solid rgba(16,185,129,.3)}
+    .toggle-btn.inactive:hover{background:rgba(16,185,129,.2)}
+    .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+    .status-dot.on{background:var(--accent3)}.status-dot.off{background:var(--danger)}
+    .threat-breakdown{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+    .threat-card{background:var(--surface);border:1px solid rgba(239,68,68,.2);border-radius:var(--radius);padding:16px}
+    .threat-card .tc-type{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--danger);margin-bottom:6px}
+    .threat-card .tc-count{font-size:28px;font-weight:900;font-family:'JetBrains Mono',monospace;color:var(--text)}
+    .threat-card .tc-sev{font-size:11px;color:var(--muted);margin-top:4px}
+    .fn-cell{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .loading{text-align:center;padding:48px;color:var(--muted)}
+    .pill-row{display:flex;gap:5px;flex-wrap:wrap}
+    .tpill{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#ef4444;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700}
+    .refresh-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Space Grotesk',sans-serif;transition:all .2s}
+    .refresh-btn:hover{color:var(--accent);border-color:var(--accent)}
+  </style>
+</head>
+<body>
+<nav class="topnav" id="main-nav"></nav>
+
+<div class="page-wrap">
+  <div class="admin-header">
+    <div class="admin-icon">⚡</div>
+    <div>
+      <h1>Admin Dashboard</h1>
+      <p>Platform-wide overview — all users, uploads and analyses</p>
+    </div>
+    <button class="refresh-btn" onclick="loadAll()" style="margin-left:auto">↺ Refresh</button>
+  </div>
+
+  <!-- Platform Stats -->
+  <div class="stats-row" id="platform-stats">
+    <div class="stat-card"><div class="stat-value" id="st-users">—</div><div class="stat-label">Registered Users</div></div>
+    <div class="stat-card"><div class="stat-value" id="st-sessions">—</div><div class="stat-label">Total Analyses</div></div>
+    <div class="stat-card"><div class="stat-value" id="st-packets">—</div><div class="stat-label">Packets Analyzed</div></div>
+    <div class="stat-card danger"><div class="stat-value" id="st-critical">—</div><div class="stat-label">High/Critical Sessions</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-nav">
+    <button class="anav-tab active" onclick="switchTab('sessions')">📋 All Sessions</button>
+    <button class="anav-tab" onclick="switchTab('users')">👥 Users</button>
+    <button class="anav-tab" onclick="switchTab('threats')">🚨 Threat Stats</button>
+  </div>
+
+  <!-- Sessions Tab -->
+  <div class="tab-panel active" id="tab-sessions">
+    <div class="section-head">
+      <h3>All Analyses</h3>
+      <div class="filter-row">
+        <input type="text" id="sess-search" placeholder="🔍 Filename or user…" oninput="filterSessions()"/>
+        <select id="sess-sev" onchange="filterSessions()">
+          <option value="">All Severities</option>
+          <option>NORMAL</option><option>LOW</option><option>MEDIUM</option><option>HIGH</option><option>CRITICAL</option>
+        </select>
+      </div>
+    </div>
+    <div id="sessions-area"><div class="loading">Loading…</div></div>
+  </div>
+
+  <!-- Users Tab -->
+  <div class="tab-panel" id="tab-users">
+    <div class="section-head">
+      <h3>Registered Users</h3>
+      <input type="text" id="user-search" placeholder="🔍 Search users…" oninput="filterUsers()"/>
+    </div>
+    <div id="users-area"><div class="loading">Loading…</div></div>
+  </div>
+
+  <!-- Threats Tab -->
+  <div class="tab-panel" id="tab-threats">
+    <div class="section-head"><h3>Threat Type Breakdown</h3></div>
+    <div id="threats-area"><div class="loading">Loading…</div></div>
+  </div>
+</div>
+
+<script src="nav.js"></script>
+<script>
+const API = "http://localhost:5000";
+let allSessions = [], allUsers = [], allThreats = [];
+
+async function authFetch(path) {
+  const token = localStorage.getItem("ntdap_token");
+  const res = await fetch(`${API}${path}`, { headers:{"Authorization":`Bearer ${token}`} });
+  if (res.status === 401 || res.status === 403) { window.location.href = "login.html"; throw new Error("Unauth"); }
+  return res.json();
+}
+
+async function loadAll() {
+  const token = localStorage.getItem("ntdap_token");
+  const user  = JSON.parse(localStorage.getItem("ntdap_user") || "{}");
+  if (!token || user.role !== "admin") { window.location.href = "login.html"; return; }
+
+  document.getElementById("main-nav").outerHTML = renderNav("admin");
+
+  try {
+    const [statsData, sessData, usersData, threatData] = await Promise.all([
+      authFetch("/admin/stats"),
+      authFetch("/admin/sessions"),
+      authFetch("/admin/users"),
+      authFetch("/threat-stats"),
+    ]);
+
+    // Platform stats
+    document.getElementById("st-users").textContent    = statsData.total_users || 0;
+    document.getElementById("st-sessions").textContent = statsData.total_sessions || 0;
+    document.getElementById("st-packets").textContent  = (statsData.total_packets||0).toLocaleString();
+    const sev = statsData.severity_breakdown || {};
+    document.getElementById("st-critical").textContent = (sev.HIGH||0) + (sev.CRITICAL||0);
+
+    // Sessions
+    allSessions = sessData.sessions || [];
+    renderSessions(allSessions);
+
+    // Users
+    allUsers = usersData.users || [];
+    renderUsers(allUsers);
+
+    // Threats
+    allThreats = threatData.stats || [];
+    renderThreats(allThreats);
+
+  } catch(e) {
+    if (e.message !== "Unauth") console.error(e);
+  }
+}
+
+function switchTab(name) {
+  document.querySelectorAll(".anav-tab").forEach((t,i) => {
+    const tabs = ["sessions","users","threats"];
+    t.classList.toggle("active", tabs[i] === name);
+  });
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+  document.getElementById(`tab-${name}`).classList.add("active");
+}
+
+function renderSessions(sessions) {
+  const area = document.getElementById("sessions-area");
+  if (!sessions.length) { area.innerHTML = `<div class="loading">No sessions found.</div>`; return; }
+  const rows = sessions.map(s => {
+    const threats = [];
+    if (s.port_scan_detected) threats.push("PORT SCAN");
+    if (s.syn_flood_detected)  threats.push("SYN FLOOD");
+    if (s.beaconing_detected)  threats.push("BEACONING");
+    if (s.dns_tunnel_detected) threats.push("DNS TUNNEL");
+    const pills = threats.map(t=>`<span class="tpill">${t}</span>`).join("") || '<span style="color:var(--muted);font-size:11px">—</span>';
+    const sev = s.severity || "UNKNOWN";
+    const date = s.uploaded_at ? new Date(s.uploaded_at).toLocaleString() : "—";
+    return `<tr>
+      <td><span class="fn-cell" title="${s.filename}">📄 ${s.filename}</span></td>
+      <td><span style="color:var(--accent);font-weight:700;font-size:13px">${s.username||'<i style="color:var(--muted)">anonymous</i>'}</span><br><span style="color:var(--muted);font-size:11px">${s.email||''}</span></td>
+      <td style="color:var(--muted);font-size:12px">${date}</td>
+      <td><span class="sev-chip sev-${sev}">${sev}</span></td>
+      <td class="mono">${(s.total_packets||0).toLocaleString()}</td>
+      <td class="mono" style="color:${(s.anomaly_percentage||0)>10?"var(--danger)":"var(--text)"}">${(s.anomaly_percentage||0).toFixed(1)}%</td>
+      <td><div class="pill-row">${pills}</div></td>
+    </tr>`;
+  }).join("");
+  area.innerHTML = `<table class="data-table">
+    <thead><tr><th>File</th><th>User</th><th>Date</th><th>Severity</th><th>Packets</th><th>Anomalies</th><th>Threats</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function filterSessions() {
+  const q = document.getElementById("sess-search").value.toLowerCase();
+  const sev = document.getElementById("sess-sev").value;
+
+  renderSessions(
+    allSessions.filter(s =>
+      (
+        !q ||
+        (s.filename || "").toLowerCase().includes(q) ||
+        (s.username || "").toLowerCase().includes(q)
+      ) &&
+      (!sev || s.severity === sev)
+    )
+  );
+}
+
+function renderUsers(users) {
+  const area = document.getElementById("users-area");
+  if (!users.length) { area.innerHTML = `<div class="loading">No users found.</div>`; return; }
+  const rows = users.map(u => {
+    const isActive = u.is_active === 1 || u.is_active === true;
+    const btnCls   = isActive ? "active" : "inactive";
+    const btnLabel = isActive ? "Disable" : "Enable";
+    const joined   = u.created_at ? u.created_at.split("T")[0] : "—";
+    const lastLogin= u.last_login  ? u.last_login.split("T")[0]  : "Never";
+    return `<tr id="user-row-${u.id}">
+      <td><strong>${u.username}</strong></td>
+      <td class="mono" style="color:var(--muted)">${u.email}</td>
+      <td><span class="role-badge role-${u.role}">${u.role === 'admin' ? '⚡ Admin' : '👤 User'}</span></td>
+      <td><span class="status-dot ${isActive?'on':'off'}"></span>${isActive?'Active':'Disabled'}</td>
+      <td class="mono" style="color:var(--accent)">${(u.session_count||0)}</td>
+      <td class="mono">${(u.total_packets_analyzed||0).toLocaleString()}</td>
+      <td style="color:var(--muted);font-size:12px">${joined}</td>
+      <td style="color:var(--muted);font-size:12px">${lastLogin}</td>
+      <td>${u.role !== 'admin' ? `<button class="toggle-btn ${btnCls}" onclick="toggleUser(${u.id},${!isActive})">${btnLabel}</button>` : '<span style="color:var(--muted);font-size:11px">Protected</span>'}</td>
+    </tr>`;
+  }).join("");
+  area.innerHTML = `<table class="data-table">
+    <thead><tr><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Analyses</th><th>Packets</th><th>Joined</th><th>Last Login</th><th></th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function filterUsers() {
+  const q = document.getElementById("user-search").value.toLowerCase();
+
+  renderUsers(
+    allUsers.filter(u =>
+      !q ||
+      (u.username || "").toLowerCase().includes(q) ||
+      (u.email || "").toLowerCase().includes(q)
+    )
+  );
+}
+
+async function toggleUser(uid, makeActive) {
+  const token = localStorage.getItem("ntdap_token");
+  await fetch(`${API}/admin/users/${uid}/toggle`, {
+    method:"POST", headers:{"Authorization":`Bearer ${token}`,"Content-Type":"application/json"},
+    body: JSON.stringify({active: makeActive})
+  });
+  // Update local data
+  const u = allUsers.find(x => x.id === uid);
+  if (u) u.is_active = makeActive ? 1 : 0;
+  renderUsers(allUsers);
+}
+
+function renderThreats(threats) {
+  const area = document.getElementById("threats-area");
+  if (!threats.length) { area.innerHTML = `<div class="loading">No threat data yet.</div>`; return; }
+  const grouped = {};
+  threats.forEach(t => {
+    if (!grouped[t.alert_type]) grouped[t.alert_type] = [];
+    grouped[t.alert_type].push(t);
+  });
+  const cards = Object.entries(grouped).map(([type, items]) => {
+    const total = items.reduce((s,x) => s+(x.count||0), 0);
+    const sevs  = items.map(x=>`${x.severity}: ${x.count}`).join(" · ");
+    const icons = {PORT_SCAN:"🔍",SYN_FLOOD:"🌊",BEACONING:"📡",DNS_TUNNEL:"🕳️",STAT_OUTLIER:"📊"};
+    return `<div class="threat-card">
+      <div class="tc-type">${icons[type]||"⚠️"} ${type.replace("_"," ")}</div>
+      <div class="tc-count">${total.toLocaleString()}</div>
+      <div class="tc-sev">${sevs}</div>
+    </div>`;
+  }).join("");
+  area.innerHTML = `<div class="threat-breakdown">${cards}</div>`;
+}
+
+loadAll();
+</script>
+</body>
+</html>

@@ -2,202 +2,294 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Security — NTDAP</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"/>
+  <title>Security — NTDAP v3</title>
   <link rel="stylesheet" href="shared.css"/>
   <style>
-    .anom-score-bar{display:inline-flex;align-items:center;gap:8px}
-    .score-track{width:80px;background:var(--surface2);border-radius:100px;height:6px;overflow:hidden}
-    .score-fill{height:100%;background:var(--danger);border-radius:100px}
-    .feat-used{margin-bottom:24px}
-    .iqr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:24px}
-    .iqr-card{background:var(--surface);border:1px solid rgba(245,158,11,.2);border-left:3px solid var(--warn);border-radius:10px;padding:16px}
-    .iqr-feat{font-weight:700;color:var(--warn);margin-bottom:6px;font-size:14px}
+    .big-sev{font-size:56px;font-weight:900;font-family:'JetBrains Mono',monospace;line-height:1;letter-spacing:-.03em}
+    .meter-row{display:flex;align-items:center;gap:12px;margin:10px 0}
+    .meter-track{flex:1;background:var(--surface2);border-radius:100px;height:10px;overflow:hidden;border:1px solid var(--border)}
+    .meter-fill{height:100%;border-radius:100px;transition:width 1.2s ease}
+    .scan-card{background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.28);border-radius:12px;padding:20px;margin-bottom:12px}
+    .flood-card{background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.28);border-radius:12px;padding:20px;margin-bottom:12px}
+    .beacon-card{background:rgba(124,58,237,.08);border:1px solid rgba(124,58,237,.28);border-radius:12px;padding:20px;margin-bottom:12px}
+    .dns-card{background:rgba(0,212,255,.06);border:1px solid rgba(0,212,255,.22);border-radius:12px;padding:20px;margin-bottom:12px}
+    .threat-ip{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;margin-bottom:4px}
+    .threat-detail{font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:10px}
+    .iqr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+    .iqr-card{background:var(--surface2);border:1px solid rgba(245,158,11,.2);border-left:3px solid var(--warn);border-radius:10px;padding:16px}
+    .iqr-feat{font-weight:700;color:var(--warn);font-size:13px;margin-bottom:6px}
     .iqr-detail{font-size:12px;color:var(--muted);line-height:1.7}
-    .scan-card{background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.25);border-radius:12px;padding:20px;margin-bottom:16px}
-    .scan-ip{font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--danger);font-weight:700;margin-bottom:4px}
-    .scan-detail{font-size:13px;color:var(--muted)}
-    .meter-wrap{display:flex;align-items:center;gap:12px;margin:16px 0}
-    .meter-track{flex:1;background:var(--surface2);border-radius:100px;height:12px;overflow:hidden}
-    .meter-fill{height:100%;border-radius:100px;transition:width 1.2s}
-    .severity-big{font-size:64px;font-weight:900;font-family:'JetBrains Mono',monospace;line-height:1}
+    .score-bar{display:inline-flex;align-items:center;gap:8px}
+    .score-track{width:80px;background:var(--surface2);border-radius:100px;height:5px;overflow:hidden}
+    .score-fill{height:100%;background:var(--danger);border-radius:100px}
+    .feat-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .feat-tag{background:var(--surface2);border:1px solid var(--border);border-radius:5px;
+      padding:2px 9px;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--muted)}
+    .mitre-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(124,58,237,.12);
+      border:1px solid rgba(124,58,237,.3);border-radius:5px;padding:2px 8px;
+      font-size:10px;font-weight:700;color:#a78bfa;font-family:'JetBrains Mono',monospace}
   </style>
 </head>
 <body>
 <div id="navMount"></div>
 <div class="page-wrap" id="content">
-  <div style="text-align:center;padding:80px;color:var(--muted)">Loading...</div>
+  <div style="text-align:center;padding:80px;color:var(--muted)">Loading…</div>
 </div>
 <script src="nav.js"></script>
 <script>
+const token = localStorage.getItem("ntdap_token");
+
+if (!token) {
+    window.location.href = "login.html";
+}
+
 document.getElementById("navMount").innerHTML = renderNav("security");
 const data = getResult();
-if (data) buildPage(data);
 
-function buildPage(data) {
-  const a = data.anomalies;
-  const i = data.interpretation;
-  const sev = i.severity || "NORMAL";
-  const sevColor = severityColor(sev);
-  const anomPct = a.anomaly_percentage || 0;
+if (data) {
+    build(data);
+} else {
+    document.getElementById("content").innerHTML = `
+        <div style="text-align:center;padding:80px;">
+            <h2>No security analysis data found</h2>
+            <p style="color:var(--muted);margin-top:10px;">
+                Please upload and analyze a PCAP file first.
+            </p>
+            <br>
+            <a href="upload.html"
+               style="
+                   background:var(--accent);
+                   color:#000;
+                   padding:12px 25px;
+                   border-radius:8px;
+                   text-decoration:none;
+                   font-weight:bold;
+               ">
+               Upload PCAP →
+            </a>
+        </div>
+    `;
+}
 
-  let html = `
+function build(d) {
+  const a   = d.anomalies     || {};
+  const i   = d.interpretation || {};
+  const sev = i.severity      || "NORMAL";
+  const sColor = severityColor(sev);
+  const anomPct = +(a.anomaly_percentage || 0);
+
+  let h = `
     <div class="page-header">
-      <div class="file-badge">📄 ${data.filename}</div>
-      <h1>Security & Anomaly Analysis</h1>
-      <p>Detailed breakdown of detected threats, anomalies, and security indicators</p>
+      <div class="file-badge">📄 ${d.filename}</div>
+      <h1>Security &amp; Anomaly Analysis</h1>
+      <p>ML anomaly detection · Threat heuristics · Statistical outliers · MITRE ATT&amp;CK hints</p>
     </div>`;
 
-  // Big severity display
-  html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px;margin-bottom:32px;display:grid;grid-template-columns:auto 1fr;gap:32px;align-items:center">
-    <div>
-      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Overall Severity</div>
-      <div class="severity-big" style="color:${sevColor}">${sev}</div>
-    </div>
-    <div>
-      <div style="display:flex;gap:32px;flex-wrap:wrap">
-        <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Anomaly Rate</div>
-          <div style="font-size:28px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${sevColor}">${anomPct}%</div>
-        </div>
-        <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Anomalous Packets</div>
-          <div style="font-size:28px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--danger)">${fmt(a.anomaly_count)}</div>
-        </div>
-        <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Normal Packets</div>
-          <div style="font-size:28px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--accent3)">${fmt(a.normal_count)}</div>
-        </div>
+  // Hero severity panel
+  h += `<div class="section-block" style="margin-bottom:20px">
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:32px;align-items:center">
+      <div>
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Overall Severity</div>
+        <div class="big-sev" style="color:${sColor}">${sev}</div>
+        <div style="margin-top:10px">${severityBadge(sev)}</div>
       </div>
-      <div class="meter-wrap">
-        <span style="font-size:12px;color:var(--muted);width:60px">Normal</span>
-        <div class="meter-track">
-          <div class="meter-fill" id="normalBar" style="background:var(--accent3);width:0%"></div>
+      <div>
+        <div style="display:flex;gap:28px;flex-wrap:wrap;margin-bottom:16px">
+          <div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Anomaly Rate</div>
+            <div style="font-size:26px;font-weight:800;font-family:'JetBrains Mono',monospace;color:${sColor}">${anomPct}%</div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Anomalous Pkts</div>
+            <div style="font-size:26px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--danger)">${fmt(a.anomaly_count)}</div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Normal Pkts</div>
+            <div style="font-size:26px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--accent3)">${fmt(a.normal_count)}</div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Severity Score</div>
+            <div style="font-size:26px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--text)">${i.severity_score||0}</div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Contamination Est.</div>
+            <div style="font-size:26px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--muted)">${((a.contamination_estimate||0)*100).toFixed(1)}%</div>
+          </div>
         </div>
-        <div class="meter-track" style="width:30%">
-          <div class="meter-fill" id="anomBar" style="background:var(--danger);width:0%"></div>
+        <div class="meter-row">
+          <span style="font-size:11px;color:var(--accent3);width:55px">Normal</span>
+          <div class="meter-track"><div class="meter-fill" id="mNorm" style="background:var(--accent3);width:0%"></div></div>
+          <div class="meter-track" style="max-width:200px"><div class="meter-fill" id="mAnom" style="background:var(--danger);width:0%"></div></div>
+          <span style="font-size:11px;color:var(--danger);width:55px">Anomaly</span>
         </div>
-        <span style="font-size:12px;color:var(--muted);width:60px">Anomaly</span>
       </div>
     </div>
   </div>`;
 
-  // Port scan alerts
-  if (a.port_scan_suspects?.length > 0) {
-    html += `<div class="section-head">🚨 Port Scan Detection</div>`;
+  // PORT SCAN
+  if (a.port_scan_suspects?.length) {
+    h += `<div class="section-block">
+      <div class="section-title"><span class="dot" style="background:var(--danger)"></span>Port Scan Detection <span class="mitre-badge" style="margin-left:8px">T1046 Network Service Discovery</span></div>`;
     a.port_scan_suspects.forEach(ps => {
-      html += `<div class="scan-card">
-        <div class="scan-ip">${ps.src_ip}</div>
-        <div class="scan-detail">Hit <strong style="color:var(--danger)">${ps.unique_ports_hit}</strong> unique destination ports
-          — this is <strong>significantly above normal</strong>. This behavior is consistent with automated port scanning tools (nmap, masscan, etc.)
-          used for network reconnaissance.</div>
-        <div style="margin-top:12px;display:flex;gap:8px">
-          <span class="badge red">⚠ Possible Port Scan</span>
-          <span class="badge warn">Investigate Immediately</span>
+      h += `<div class="scan-card">
+        <div class="threat-ip" style="color:var(--danger)">${ps.src_ip}</div>
+        <div class="threat-detail">
+          Hit <strong style="color:var(--danger)">${ps.unique_ports_hit}</strong> unique destination ports 
+          across <strong style="color:var(--danger)">${ps.unique_hosts_hit}</strong> hosts 
+          (<strong>${ps.scan_type}</strong> scan) — ${ps.total_packets} total packets.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <span class="badge badge-red">⚠ Port Scan</span>
+          <span class="badge badge-red">${ps.scan_type}</span>
+          <span class="badge badge-warn">Investigate</span>
         </div>
       </div>`;
     });
+    h += `</div>`;
   }
 
-  // ML features used
-  if (a.features_used?.length > 0) {
-    html += `<div class="section-head">🤖 ML Detection — Isolation Forest</div>`;
-    html += `<div class="feat-used">
-      <p style="font-size:13px;color:var(--muted);margin-bottom:10px">Isolation Forest trained on ${a.features_used.length} features:</p>
-      <div class="tag-list">${a.features_used.map(f=>`<span class="tag">${f}</span>`).join("")}</div>
+  // SYN FLOOD
+  if (a.syn_flood_suspects?.length) {
+    h += `<div class="section-block">
+      <div class="section-title"><span class="dot" style="background:var(--warn)"></span>SYN Flood Detection <span class="mitre-badge" style="margin-left:8px">T1499 Endpoint DoS</span></div>`;
+    a.syn_flood_suspects.forEach(sf => {
+      h += `<div class="flood-card">
+        <div class="threat-ip" style="color:var(--warn)">${sf.src_ip}</div>
+        <div class="threat-detail">${sf.warning} — <strong style="color:var(--warn)">${fmt(sf.syn_count)}</strong> SYN-without-ACK packets.</div>
+        <div style="display:flex;gap:8px"><span class="badge badge-warn">SYN Flood</span><span class="badge badge-warn">DoS Risk</span></div>
+      </div>`;
+    });
+    h += `</div>`;
+  }
+
+  // BEACONING
+  if (a.beaconing_suspects?.length) {
+    h += `<div class="section-block">
+      <div class="section-title"><span class="dot" style="background:var(--accent2)"></span>Beaconing / C2 Detection <span class="mitre-badge" style="margin-left:8px">T1071 Application Layer Protocol</span></div>`;
+    a.beaconing_suspects.forEach(bc => {
+      h += `<div class="beacon-card">
+        <div class="threat-ip" style="color:#a78bfa">${bc.src_ip} → ${bc.dst_ip}</div>
+        <div class="threat-detail">
+          ${bc.warning}<br/>
+          Interval: <strong style="color:var(--text)">~${bc.interval_mean_s}s</strong> · 
+          CV (regularity): <strong style="color:var(--text)">${bc.interval_cv}</strong> · 
+          Connections: <strong style="color:var(--text)">${bc.connection_count}</strong>
+        </div>
+        <div style="display:flex;gap:8px"><span class="badge badge-purple">Beaconing</span><span class="badge badge-purple">C2 Hint</span></div>
+      </div>`;
+    });
+    h += `</div>`;
+  }
+
+  // DNS TUNNELLING
+  if (a.dns_tunnel_suspects?.length) {
+    h += `<div class="section-block">
+      <div class="section-title"><span class="dot" style="background:var(--accent)"></span>DNS Tunnelling Hints <span class="mitre-badge" style="margin-left:8px">T1071.004 DNS</span></div>`;
+    a.dns_tunnel_suspects.forEach(dt => {
+      h += `<div class="dns-card">
+        <div class="threat-detail">${dt.warning}</div>
+        <div style="display:flex;gap:8px"><span class="badge badge-blue">${dt.type}</span></div>
+      </div>`;
+    });
+    h += `</div>`;
+  }
+
+  // No threats found
+  if (!a.port_scan_suspects?.length && !a.syn_flood_suspects?.length && !a.beaconing_suspects?.length && !a.dns_tunnel_suspects?.length) {
+    h += `<div class="alert-card success">
+      <span class="alert-icon">✅</span>
+      <div><div class="alert-title">No Advanced Threats Detected</div>
+      <div class="alert-body">No port scans, SYN floods, beaconing, or DNS tunnelling patterns found.</div></div>
+    </div>`;
+  }
+
+  // ML Features used
+  if (a.features_used?.length) {
+    h += `<div class="section-block">
+      <div class="section-title"><span class="dot"></span>ML Ensemble — Isolation Forest + Local Outlier Factor</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:10px">${a.features_used.length} features used in detection:</p>
+      <div class="feat-tags">${a.features_used.map(f=>`<span class="feat-tag">${f}</span>`).join("")}</div>
     </div>`;
   }
 
   // Anomaly by protocol
-  if (a.anomaly_by_protocol && Object.keys(a.anomaly_by_protocol).length > 0) {
-    html += `<div class="table-wrap"><table>
-      <tr><th>Protocol</th><th>Anomalous Packets</th><th>Visual</th></tr>`;
-    const maxA = Math.max(...Object.values(a.anomaly_by_protocol));
-    Object.entries(a.anomaly_by_protocol).sort((x,y)=>y[1]-x[1]).forEach(([proto,cnt]) => {
+  const byProto = a.anomaly_by_protocol || {};
+  if (Object.keys(byProto).length) {
+    const maxA = Math.max(...Object.values(byProto));
+    h += `<div class="section-block">
+      <div class="section-title"><span class="dot"></span>Anomalies by Protocol</div>
+      <div class="table-wrap"><table>
+        <tr><th>Protocol</th><th>Anomalous Packets</th><th>Distribution</th></tr>`;
+    Object.entries(byProto).sort((a,b)=>b[1]-a[1]).forEach(([proto, cnt]) => {
       const w = ((cnt/maxA)*100).toFixed(0);
-      html += `<tr>
-        <td><span class="badge red">${proto}</span></td>
-        <td class="mono" style="color:var(--danger)">${fmt(cnt)}</td>
-        <td><div class="score-track" style="width:120px"><div class="score-fill" style="width:${w}%"></div></div></td>
+      h += `<tr>
+        <td>${protoBadge(proto)}</td>
+        <td class="mono td-anom">${fmt(cnt)}</td>
+        <td><div class="score-bar"><div class="score-track" style="width:120px"><div class="score-fill" style="width:${w}%"></div></div><span class="td-dim" style="font-size:11px;font-family:'JetBrains Mono',monospace">${w}%</span></div></td>
       </tr>`;
     });
-    html += `</table></div>`;
+    h += `</table></div></div>`;
   }
 
-  // Anomalous packets table
-  if (a.anomalous_packets?.length > 0) {
-    html += `<div class="section-head">🔴 Top Anomalous Packets (Most Deviant First)</div>`;
-    html += `<div class="table-wrap"><table>
-      <tr><th>#</th><th>Src IP</th><th>Dst IP</th><th>Protocol</th><th>Size</th><th>Dst Port</th><th>Anomaly Score</th><th>Deviation</th></tr>`;
-    const minScore = Math.min(...a.anomalous_packets.map(p=>p.anomaly_score||0));
-    const maxScore = Math.max(...a.anomalous_packets.map(p=>p.anomaly_score||0));
+  // Top anomalous packets
+  if (a.anomalous_packets?.length) {
+    const scores = a.anomalous_packets.map(p=>+(p.anomaly_score||0));
+    const minS = Math.min(...scores), maxS = Math.max(...scores);
+    h += `<div class="section-block">
+      <div class="section-title"><span class="dot" style="background:var(--danger)"></span>Top Anomalous Packets — Lowest Score = Most Deviant</div>
+      <div class="table-wrap"><table>
+        <tr><th>#</th><th>Src IP</th><th>Dst IP</th><th>Proto</th><th>Size</th><th>Port</th><th>Type</th><th>Score</th><th>Deviation</th></tr>`;
     a.anomalous_packets.forEach(p => {
-      const scoreAbs = Math.abs(p.anomaly_score||0);
-      const deviation = maxScore !== minScore ? (1 - (p.anomaly_score - minScore)/(maxScore - minScore))*100 : 50;
-      html += `<tr>
-        <td class="mono" style="color:var(--muted)">${p.packet_number}</td>
-        <td class="mono">${p.src_ip}</td>
-        <td class="mono">${p.dst_ip}</td>
-        <td><span class="badge blue">${p.protocol}</span></td>
-        <td class="mono">${p.packet_length} B</td>
-        <td class="mono">${p.dst_port === "—" ? "—" : p.dst_port}</td>
-        <td class="mono" style="color:var(--danger)">${p.anomaly_score}</td>
-        <td><div class="anom-score-bar">
-          <div class="score-track"><div class="score-fill" style="width:${deviation.toFixed(0)}%"></div></div>
-          <span style="font-size:11px;color:var(--muted)">${deviation.toFixed(0)}%</span>
-        </div></td>
+      const dev = maxS!==minS ? ((1-(+(p.anomaly_score||0)-minS)/(maxS-minS))*100).toFixed(0) : 50;
+      h += `<tr>
+        <td class="td-dim">${p.packet_number}</td>
+        <td class="mono">${p.src_ip||"—"}</td>
+        <td class="mono">${p.dst_ip||"—"}</td>
+        <td>${protoBadge(p.protocol||"OTHER")}</td>
+        <td class="mono">${p.packet_length||0} B</td>
+        <td class="mono text-accent">${p.dst_port||"—"}</td>
+        <td>${p.packet_type ? `<span class="badge badge-gray">${p.packet_type}</span>` : "—"}</td>
+        <td class="mono td-anom">${p.anomaly_score}</td>
+        <td><div class="score-bar"><div class="score-track"><div class="score-fill" style="width:${dev}%"></div></div><span class="td-dim" style="font-size:10px;font-family:'JetBrains Mono',monospace"> ${dev}%</span></div></td>
       </tr>`;
     });
-    html += `</table></div>`;
-    html += `<p style="font-size:12px;color:var(--muted);margin-bottom:24px">Lower anomaly score = more deviant from normal traffic.</p>`;
+    h += `</table></div></div>`;
   }
 
-  // IQR Statistical Outliers
-  if (a.stat_anomalies?.length > 0) {
-    html += `<div class="section-head">📐 Statistical Outliers — IQR Method</div>`;
-    html += `<div class="iqr-grid">`;
+  // IQR Statistical outliers
+  if (a.stat_anomalies?.length) {
+    h += `<div class="section-block">
+      <div class="section-title"><span class="dot" style="background:var(--warn)"></span>Statistical Outliers — IQR Method</div>
+      <div class="iqr-grid">`;
     a.stat_anomalies.forEach(sa => {
-      html += `<div class="iqr-card">
+      h += `<div class="iqr-card">
         <div class="iqr-feat">${sa.feature}</div>
         <div class="iqr-detail">
-          <strong>${sa.outlier_count}</strong> outliers found<br/>
-          Normal range: <code class="mono">${sa.normal_range}</code><br/>
-          Mean value: <code class="mono">${sa.mean}</code>
+          <strong>${fmt(sa.outlier_count)}</strong> outliers detected<br/>
+          Normal range: <code style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent)">${sa.normal_range}</code><br/>
+          Mean: <code style="font-family:'JetBrains Mono',monospace;font-size:11px">${sa.mean}</code> · Median: <code style="font-family:'JetBrains Mono',monospace;font-size:11px">${sa.median}</code>
         </div>
       </div>`;
     });
-    html += `</div>`;
+    h += `</div></div>`;
   }
 
-  // Analysis text
-  html += `<div class="section-head">💬 Security Interpretation</div>`;
-  html += `<div class="interp-grid">`;
-  html += interpCard("Anomaly Analysis", i.anomaly_analysis);
-  if (i.port_scan_warning) html += interpCard("⚠️ Port Scan", i.port_scan_warning);
-  html += `</div>`;
-
-  html += `<div class="alert ${sev==="HIGH"?"danger":sev==="MEDIUM"?"warn":"success"}">
+  // Recommendation
+  h += `<div class="alert-card ${sev==='HIGH'||sev==='CRITICAL'?'danger':sev==='MEDIUM'?'warn':sev==='LOW'?'info':'success'}">
     <span class="alert-icon">💡</span>
-    <div><strong>Recommendation:</strong> ${i.recommendation}</div>
+    <div><div class="alert-title">Recommendation</div>
+    <div class="alert-body">${i.recommendation||"No immediate action required."}</div></div>
   </div>`;
 
-  html += navRow("result_traffic.html", "← Traffic Analysis", "result_charts.html", "Visualizations →");
-  document.getElementById("content").innerHTML = html;
+  h += navRow("result_traffic.html","← Traffic","result_charts.html","Charts →");
+  document.getElementById("content").innerHTML = h;
 
-  // Animate meter bars
   setTimeout(() => {
-    const normalPct = 100 - anomPct;
-    document.getElementById("normalBar").style.width = normalPct+"%";
-    document.getElementById("anomBar").style.width = Math.min(100, anomPct*3)+"%";
+    const norm = document.getElementById("mNorm");
+    const anom = document.getElementById("mAnom");
+    if (norm) norm.style.width = Math.min(100, 100-anomPct) + "%";
+    if (anom) anom.style.width = Math.min(100, anomPct*4) + "%";
   }, 200);
 }
-
-function interpCard(title, text) {
-  return `<div class="interp-card"><h4>${title}</h4><p>${text||"—"}</p></div>`;
-}
-function navRow(prevHref, prevLabel, nextHref, nextLabel) {
-  return `<div style="display:flex;gap:12px;justify-content:space-between;margin-top:32px;border-top:1px solid var(--border);padding-top:24px">
-    <a href="${prevHref}" style="border:1px solid var(--border);color:var(--text);padding:10px 20px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none">${prevLabel}</a>
-    <a href="${nextHref}" style="background:var(--accent);color:#000;padding:10px 24px;border-radius:8px;font-weight:700;font-size:14px;text-decoration:none">${nextLabel}</a>
-  </div>`;
-}
 </script>
-</body>
-</html>
+</body></html>
