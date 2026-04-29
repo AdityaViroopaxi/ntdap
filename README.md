@@ -1,13 +1,13 @@
-# NTDAP v2.0  
+# NTDAP v4.0  
 ## Network Traffic Data Analysis Platform with AI Integration
 
 ---
 
 ## 1. Introduction
 
-NTDAP v2.0 (Network Traffic Detection and Analysis Platform) is a backend-driven analytical system designed to process network packet capture (PCAP) files and generate structured insights using data processing, machine learning, and generative AI techniques.
+NTDAP v4.0 (Network Traffic Detection and Analysis Platform) is a full-stack analytical system designed to process network packet capture (PCAP) files and generate structured insights using data processing, machine learning, and generative AI techniques.
 
-The system focuses on transforming low-level packet-level binary data into high-level, actionable intelligence that can assist in identifying network behavior, detecting anomalies, and supporting cybersecurity analysis. By integrating multiple layers of processing and analysis, NTDAP reduces the complexity involved in interpreting raw network traffic.
+The system focuses on transforming low-level packet-level binary data into high-level, actionable intelligence that can assist in identifying network behavior, detecting anomalies, and supporting cybersecurity analysis. By integrating multiple layers of processing, authentication, persistence, and AI analysis, NTDAP significantly reduces the complexity involved in interpreting raw network traffic.
 
 ---
 
@@ -19,10 +19,8 @@ Traditional network traffic analysis tools rely heavily on manual inspection of 
 - Manual inspection increases the chances of human error  
 - Identifying patterns in large-scale traffic data is difficult  
 - Most tools lack automated intelligence and contextual interpretation  
-
-These limitations make it challenging to efficiently detect anomalies and potential threats in modern network environments.
-
-To address these issues, this project introduces an automated system that combines data processing, machine learning, and AI-driven interpretation to streamline network analysis.
+- Lack of user-based tracking, history, and centralized monitoring  
+To address these issues, this project introduces an automated system that combines data processing, machine learning, database persistence, authentication, and AI-driven interpretation to streamline network analysis.
 
 ---
 
@@ -34,6 +32,8 @@ The primary objectives of the NTDAP system are:
 - To detect anomalous patterns using machine learning techniques  
 - To generate meaningful statistical summaries and visual insights  
 - To provide AI-based interpretation of network behavior  
+- To implement user authentication and role-based access  
+- To maintain per-user analysis history and session tracking  
 - To reduce dependency on manual packet inspection methods  
 
 ---
@@ -45,6 +45,7 @@ The primary objectives of the NTDAP system are:
 - Python (version 3.8 or higher)  
 - pip  
 - Git  
+- MySQL Server  
 - Wireshark (optional)  
 
 ---
@@ -53,94 +54,64 @@ The primary objectives of the NTDAP system are:
 
 ```bash
 git clone <repository-url>
-cd ntdap/backend
-
----
-
-### 4.3 Create Virtual Environment
-
-```bash
-python -m venv venv
+cd ntdap_v4
 ```
+---
+## 4.3 Create Virtual Environment
+```
+python -m venv venv
 
 Activate:
 
-**Windows**
+Windows
 
-```bash
 venv\Scripts\activate
-```
 
-**Linux/Mac**
+Linux/Mac
 
-```bash
 source venv/bin/activate
 ```
-
 ---
 
-### 4.4 Install Dependencies
-
-```bash
+## 4.4 Install Dependencies
+```
 pip install -r requirements.txt
 ```
-
-If `requirements.txt` is not available:
-
-```bash
-pip install flask flask-cors pandas numpy scapy scikit-learn matplotlib seaborn requests python-dotenv
-```
-
 ---
 
-### 4.5 Configure Environment Variables
+## 4.5 Configure Environment Variables
 
-Create a `.env` file inside the backend folder:
+### Create a .env file inside the backend folder:
 
 ```
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=your_password
+MYSQL_DATABASE=ntdap_db
 GEMINI_API_KEY=your_api_key_here
 ```
-
-Used in code:
-
-```python
-from dotenv import load_dotenv
-import os
-
-load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-```
-
 ---
 
-### 4.6 Run Application
-
-```bash
+## 4.6 Run Application
+```
+cd backend
 python main.py
 ```
-
 Server runs at:
 
-```
 http://localhost:5000
-```
-
----
-
-### 4.7 Verify Installation
+4.7 Verify Installation
 
 Open:
 
-```
 http://localhost:5000
-```
 
 ---
 
 ## 5. System Architecture
-
+### PCAP Input
 ```
-PCAP Input
 → Parsing Layer
 → Data Cleaning Layer
 → Exploratory Data Analysis
@@ -149,85 +120,92 @@ PCAP Input
 → Visualization Layer
 → Interpretation Layer
 → AI Analysis Layer
-→ Output
+→ Database Storage (MySQL)
+→ Authentication & Access Control
+→ Output (Frontend Dashboard)
 ```
-
 ---
 
 ## 6. Methodology
 
-The system follows a structured, multi-stage data processing pipeline where raw network packet data is progressively transformed into meaningful and actionable intelligence. Each stage in the pipeline performs a specific function, ensuring data is cleaned, analyzed, and enriched before final interpretation.
-
----
+The system follows a structured, multi-stage data processing pipeline where raw network packet data is progressively transformed into meaningful and actionable intelligence.
 
 ### Step 1: Data Acquisition
 
-In this stage, the user uploads a PCAP or PCAPNG file through the frontend interface. The file is transmitted to the backend using an HTTP POST request handled by the Flask framework. The backend validates the uploaded file to ensure it is not empty and is in the correct format. Once validated, the file is securely stored in the server’s upload directory. This stage acts as the entry point of the system and ensures that raw network traffic data is properly captured for further processing. Proper handling at this stage is critical to avoid corrupted or invalid inputs affecting downstream analysis.
-
----
+Users upload PCAP files through a frontend interface. The backend validates and securely stores them.
 
 ### Step 2: Packet Parsing
 
-The parsing stage is responsible for converting raw binary packet data into a structured format. The system uses Scapy to read the PCAP file using functions such as `rdpcap()`. Each packet is iterated sequentially, and relevant information is extracted from different protocol layers. This includes source and destination IP addresses, transport layer ports, protocol type (TCP, UDP, ICMP), packet length, TTL, and TCP flags. The extracted data is stored as a collection of structured records. These records are then converted into a Pandas DataFrame, enabling efficient data manipulation. This step transforms unstructured network data into a usable format for analysis.
-
----
+Scapy extracts 35+ features including protocol, IPs, ports, flags, payload, entropy, and timing metrics.
 
 ### Step 3: Data Cleaning
 
-Once the raw packet data is structured, it undergoes a cleaning process to ensure data quality and consistency. Duplicate packets are identified and removed to avoid skewed analysis results. Missing or null values are handled appropriately, either by filling them with default values or excluding incomplete records. Data types are normalized to ensure consistency across all fields. Any malformed or invalid entries are filtered out. This step ensures that the dataset is reliable and suitable for further statistical and machine learning operations. Clean data is essential for accurate anomaly detection and interpretation.
-
----
+Handles missing values, duplicates, invalid packets, and normalizes data for ML.
 
 ### Step 4: Feature Engineering
 
-In this stage, relevant features are selected and prepared for machine learning analysis. Since machine learning models require numerical input, non-numeric fields are either transformed or excluded. Important numerical features such as packet length, port numbers, and timing-related attributes are retained. Additional derived features may also be created if needed to enhance model performance. The dataset is then formatted into a structure compatible with the machine learning algorithm. Feature engineering plays a crucial role in improving the accuracy and effectiveness of anomaly detection.
-
----
+Prepares numeric features such as packet size, IAT, flow stats, and entropy for ML models.
 
 ### Step 5: Statistical Analysis
 
-The system performs exploratory data analysis (EDA) to generate key statistical insights about the network traffic. This includes calculating the total number of packets, total bytes transferred, and the duration of the capture. It also computes packet rate (packets per second) to understand traffic intensity. Protocol distribution is analyzed to identify the most commonly used protocols. The system identifies top source IP addresses and frequently targeted destination ports. These statistics provide a high-level overview of network behavior and help identify patterns or irregularities even before applying machine learning.
-
----
-
+Generates insights like:
+```
+Packet count
+Byte volume
+Protocol distribution
+Top IPs and ports
+Traffic rate
+```
 ### Step 6: Machine Learning (Anomaly Detection)
 
-The cleaned and processed dataset is then passed to the machine learning module for anomaly detection. The system uses the Isolation Forest algorithm, which is an unsupervised learning technique designed to detect outliers. The model is trained on the dataset to learn normal traffic behavior. It then isolates data points that deviate significantly from the norm, marking them as anomalies. Each packet is assigned a label indicating whether it is normal or anomalous. The system also calculates the percentage of anomalies and identifies suspicious patterns such as port scanning activity. This step enables automated detection of potentially malicious traffic without requiring labeled data.
+Uses:
 
----
+Isolation Forest
+Local Outlier Factor
+
+Detects anomalies and calculates anomaly percentage.
 
 ### Step 7: Visualization
 
-To enhance interpretability, the system generates visual representations of the analyzed data. Using Matplotlib and Seaborn, charts such as protocol distribution graphs, packet size histograms, and anomaly plots are created. These visualizations help users quickly understand traffic patterns and identify unusual behavior. The generated charts are saved as image files in the server’s results directory. These images are then made accessible to the frontend for display. Visualization plays a key role in making complex data more understandable and accessible.
+Generates 10 dark-theme charts:
 
----
-
+Protocol distribution
+Anomaly scatter
+Traffic timeline
+Heatmaps
+Flow analysis
 ### Step 8: Interpretation
 
-In this stage, the system applies rule-based logic to interpret the statistical and machine learning results. Based on metrics such as anomaly percentage and traffic patterns, the system assigns a severity level (e.g., LOW, MEDIUM, HIGH). It generates a textual summary describing the overall network behavior. The interpretation module bridges the gap between raw data analysis and human understanding. It provides context to the results, helping users understand whether the observed activity is normal or potentially harmful. This step ensures that the output is meaningful even for users without deep technical expertise.
-
----
+Assigns severity levels (LOW, MEDIUM, HIGH) and produces rule-based insights.
 
 ### Step 9: AI-Based Analysis
 
-The final stage involves advanced analysis using a large language model via the Gemini API. The system constructs a detailed prompt by combining statistical data, anomaly results, and sample packet information. This prompt is sent to the AI model, which generates a comprehensive security report. The report includes an executive summary, threat assessment, traffic behavior analysis, recommended actions, and a risk score. This step enhances the system by providing intelligent, context-aware insights. It transforms technical analysis into professional, human-readable conclusions, making the system significantly more powerful and user-friendly.
+Gemini AI generates:
 
+Executive summary
+Threat assessment
+MITRE ATT&CK mapping
+Risk score
+Recommendations
+### Step 10: Persistence & User Management
+- Stores sessions in MySQL
+- Saves packet-level data and alerts
+- Maintains per-user history
+Supports admin monitoring
 ---
-
 ## 7. Execution Flow
-
-1. Upload PCAP
-2. Parse packets
-3. Clean data
-4. Analyze statistics
-5. Detect anomalies
-6. Generate charts
-7. Interpret results
-8. AI generates report
-9. Display output
+Upload PCAP
+Parse packets
+Clean data
+Analyze statistics
+Detect anomalies
+Generate charts
+Interpret results
+Save to database
+AI generates report
+Display output
 
 ---
-
 ## 8. Technologies Used and Their Role
 
 ### Python
@@ -293,10 +271,11 @@ python-dotenv is used to manage environment variables securely. It loads sensiti
 ### Logging
 
 The logging module is used to monitor the execution flow of the application. It records key events such as parsing progress, analysis steps, and API responses. Logging helps in debugging errors and understanding system behavior during runtime. In this project, it is also used to suppress unnecessary warnings from libraries like Scapy. Structured logs provide visibility into each stage of the pipeline. This makes it easier to diagnose issues and ensure smooth operation of the system.
-## 9. Data Transformation Pipeline
 
+---
+## 9. Data Transformation Pipeline
+### Raw PCAP
 ```
-Raw PCAP
 → Structured Data
 → Clean Data
 → Statistical Features
@@ -305,61 +284,53 @@ Raw PCAP
 → Visualization
 → Interpretation
 → AI Analysis
+→ Database Storage
 → Final Output
 ```
-
 ---
 
 ## 10. Key Design Decisions
-
-* Modular architecture
-* Unsupervised ML approach
-* Separation of processing and AI layers
-* Secure configuration
-* Visualization support
-
+```
+Modular architecture
+Unsupervised ML approach
+Separation of processing and AI layers
+Secure configuration
+Role-based authentication
+Persistent storage (MySQL)
+```
 ---
-
 ## 11. Error Handling
-
-* File validation
-* Exception handling
-* API validation
-* Timeout handling
+File validation
+Exception handling
+API validation
+Timeout handling
+Database failure handling
 
 ---
-
 ## 12. Challenges
-
-* Large PCAP handling
-* Missing packet data
-* Feature selection
-* API quota issues
+Large PCAP handling
+Missing packet data
+Feature selection
+API quota issues
+Synchronizing frontend-backend state
 
 ---
 
 ## 13. Limitations
-
-* Requires valid PCAP
-* Depends on AI API
-* No real-time capture
-* Limited deep inspection
+Requires valid PCAP
+Depends on AI API
+No real-time capture
+Limited deep inspection
 
 ---
-
 ## 14. Future Enhancements
+- Real-time monitoring
+- Deep packet inspection
+- Attack classification
+- Cloud deployment
 
-* Real-time monitoring
-* Deep packet inspection
-* Attack classification
-* Dashboard UI
-* Cloud deployment
 
 ---
-
 ## 15. Conclusion
 
-NTDAP v2.0 transforms raw network traffic into structured and intelligent insights using machine learning and AI.
-
----
-
+NTDAP v4.0 transforms raw network traffic into structured, intelligent, and user-driven insights using machine learning, database systems, authentication, and AI.
