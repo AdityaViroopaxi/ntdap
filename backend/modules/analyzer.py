@@ -1,185 +1,325 @@
-# analyzer.py
-# This file uses Machine Learning to find unusual (anomalous) packets.
-# We use an algorithm called "Isolation Forest".
-# The idea is simple:
-#   - Normal packets behave similarly to each other
-#   - Anomalous packets are "isolated" (different from the rest)
-#   - The algorithm scores each packet: negative score = anomaly
-# IMPROVED:
-# - Now uses MORE features (not just 3) for better detection
-# - Added a second detection method: IQR statistical outlier detection
-# - Shows WHICH feature caused the anomaly
-# - Added basic port scan detection
+# analyzer.py — NTDAP v3.0 Advanced Anomaly Detection Engine
+#
+# Detection methods (stacked ensemble):
+#   1. Isolation Forest (ML) — general multivariate anomaly detection
+#   2. Local Outlier Factor  (ML) — density-based local anomalies
+#   3. IQR Statistical Outlier — per-feature outlier flagging
+#   4. Port Scan Detection     — horizontal + vertical scan heuristics
+#   5. SYN Flood Detection     — SYN-no-ACK rate per source IP
+#   6. Beaconing Detection     — periodic connection intervals (C2 hint)
+#   7. DNS Tunnelling Hint     — unusually large/frequent DNS queries
+#
+# Final label = majority vote of IF + LOF methods.
 
-from sklearn.ensemble import IsolationForest
 import pandas as pd
 import numpy as np
- 
- 
-def detect_anomalies(df):
-    """
-    Use Isolation Forest + statistical methods to find anomalous packets.
-    Returns a dictionary with anomaly results.
-    """
- 
+from sklearn.ensemble import IsolationForest
+from sklearn.neighbors import LocalOutlierFactor
+from sklearn.preprocessing import StandardScaler
+
+
+# ─────────────────────────────────────────────────────────────────
+# Feature groups
+# ─────────────────────────────────────────────────────────────────
+CORE_FEATURES = [
+    "packet_length", "payload_length", "ttl", "window_size",
+    "src_port", "dst_port", "inter_arrival_time", "payload_ratio",
+    "is_private_src", "header_length",
+]
+EXTENDED_FEATURES = [
+    "tcp_flags_value", "flag_syn", "flag_ack", "flag_rst",
+    "flow_packet_count", "flow_bytes_total", "flow_duration",
+    "log_packet_length", "log_inter_arrival_time", "log_flow_bytes",
+    "iat_rolling_std", "syn_no_ack",
+    "is_suspicious_port", "is_multicast",
+]
+
+
+def detect_anomalies(df: pd.DataFrame) -> dict:
     if len(df) < 10:
         return _empty_result(df)
- 
-    # ── Method 1: Isolation Forest ─────────────────────────────────
-    # Step 1: Use MORE features than before for better accuracy
-    # Previously only used 3. Now using up to 8.
-    all_features = [
-        "packet_length",        # size of the packet
-        "payload_length",       # size of the data inside
-        "ttl",                  # time to live
-        "window_size",          # TCP window size
-        "src_port",             # source port
-        "dst_port",             # destination port
-        "inter_arrival_time",   # time gap between packets
-        "payload_ratio",        # ratio of data to total size
-        "is_private_src",       # is source IP internal?
-        "header_length",        # IP header size
-    ]
- 
-    # Only use features that exist in our data
-    features = [f for f in all_features if f in df.columns]
- 
-    # Prepare the numbers
-    X = df[features].fillna(0)
- 
-    # Train and predict with Isolation Forest
-    model = IsolationForest(contamination=0.05, random_state=42)
-    model.fit(X)
- 
-    predictions = model.predict(X)   # 1 = normal, -1 = anomaly
-    scores      = model.decision_function(X)
- 
-    # ── Method 2: IQR Statistical Outlier Detection (NEW) ──────────
-    # IQR = Interquartile Range
-    # Any value below Q1 - 1.5*IQR or above Q3 + 1.5*IQR is an outlier
-    stat_anomalies = _iqr_detection(df)
- 
-    # ── Count results ───────────────────────────────────────────────
-    anomaly_count = int((predictions == -1).sum())
-    total         = len(predictions)
-    anomaly_pct   = round(anomaly_count / total * 100, 1)
- 
-    # ── Which protocols had the most anomalies? ─────────────────────
+
+    features = [f for f in CORE_FEATURES + EXTENDED_FEATURES if f in df.columns]
+    X_raw = df[features].fillna(0).values.astype(float)
+
+    # Scale for LOF (IF is scale-invariant but scale helps LOF)
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X_raw)
+
+    # ── Method 1: Isolation Forest ───────────────────────────────
+    contamination = _estimate_contamination(df)
+    iso = IsolationForest(
+        n_estimators=200,
+        contamination=contamination,
+        max_features=min(len(features), 10),
+        random_state=42,
+        n_jobs=-1,
+    )
+    iso.fit(X_scaled)
+    iso_pred   = iso.predict(X_scaled)        # 1=normal, -1=anomaly
+    iso_scores = iso.decision_function(X_scaled)
+
+    # ── Method 2: Local Outlier Factor ───────────────────────────
+    n_neighbors = min(20, max(5, len(df) // 10))
+    lof = LocalOutlierFactor(
+        n_neighbors=n_neighbors,
+        contamination=contamination,
+        n_jobs=-1,
+    )
+    lof_pred   = lof.fit_predict(X_scaled)    # 1=normal, -1=anomaly
+    lof_scores = lof.negative_outlier_factor_
+
+    # ── Ensemble: majority vote ──────────────────────────────────
+    # -1 if at least 1 of 2 methods flags it  (OR logic — higher recall)
+    # Use AND for stricter: change to sum(==-1) >= 2
+    votes  = np.stack([iso_pred, lof_pred], axis=1)
+    labels = np.where(votes.sum(axis=1) <= -1, -1, 1)   # OR: any -1 → anomaly
+
+    # Combined score: average of normalised scores
+    iso_norm  = (iso_scores - iso_scores.mean()) / (iso_scores.std() + 1e-9)
+    lof_norm  = (lof_scores - lof_scores.mean()) / (lof_scores.std() + 1e-9)
+    combined  = (iso_norm + lof_norm) / 2.0
+
+    anomaly_count = int((labels == -1).sum())
+    total         = len(labels)
+    anomaly_pct   = round(anomaly_count / total * 100, 2)
+
+    # ── Anomaly by protocol ───────────────────────────────────────
     df_copy = df.copy()
-    df_copy["is_anomaly"] = (predictions == -1)
-    anomaly_protocols = (
-        df_copy[df_copy["is_anomaly"]]["protocol"]
+    df_copy["_anomaly"]  = labels == -1
+    df_copy["_score"]    = combined
+    anomaly_by_proto = (
+        df_copy[df_copy["_anomaly"]]["protocol"]
         .value_counts()
         .to_dict()
     )
- 
-    # ── Anomalous packet table (NEW) ────────────────────────────────
-    # Show the top 10 most anomalous packets so the user can inspect them
-    df_copy["anomaly_score"] = scores
+
+    # ── Top anomalous packets table ────────────────────────────────
+    cols = ["packet_number", "src_ip", "dst_ip", "protocol",
+            "packet_length", "dst_port", "ttl", "tcp_flags", "_score"]
+    avail = [c for c in cols if c in df_copy.columns]
     anomalous_packets = (
-        df_copy[df_copy["is_anomaly"]]
-        .nsmallest(10, "anomaly_score")   # lowest score = most anomalous
-        [["packet_number", "src_ip", "dst_ip", "protocol",
-          "packet_length", "dst_port", "anomaly_score"]]
+        df_copy[df_copy["_anomaly"]]
+        .nsmallest(15, "_score")[avail]
         .fillna("—")
+        .rename(columns={"_score": "anomaly_score"})
         .to_dict(orient="records")
     )
- 
-    # Round the score for display
     for p in anomalous_packets:
-        p["anomaly_score"] = round(float(p["anomaly_score"]), 4)
- 
-    # ── Port scan detection (NEW) ───────────────────────────────────
-    port_scan_suspects = _detect_port_scan(df)
- 
+        if "anomaly_score" in p:
+            p["anomaly_score"] = round(float(p["anomaly_score"]), 4)
+
+    # ── Secondary detections ──────────────────────────────────────
+    iqr_findings        = _iqr_detection(df)
+    port_scan_suspects  = _detect_port_scan(df)
+    syn_flood_suspects  = _detect_syn_flood(df)
+    beaconing_suspects  = _detect_beaconing(df)
+    dns_tunnel_suspects = _detect_dns_tunnelling(df)
+
     return {
-        "anomaly_count":        anomaly_count,
-        "normal_count":         total - anomaly_count,
-        "total_packets":        total,
-        "anomaly_percentage":   anomaly_pct,
-        "anomaly_by_protocol":  anomaly_protocols,
-        "features_used":        features,           # NEW: show which features were used
-        "stat_anomalies":       stat_anomalies,     # NEW: IQR results
-        "anomalous_packets":    anomalous_packets,  # NEW: actual packet table
-        "port_scan_suspects":   port_scan_suspects, # NEW: port scan alerts
-        "labels":               predictions.tolist(),
-        "scores":               scores.tolist(),
+        "anomaly_count":         anomaly_count,
+        "normal_count":          total - anomaly_count,
+        "total_packets":         total,
+        "anomaly_percentage":    anomaly_pct,
+        "contamination_estimate": round(contamination, 4),
+        "anomaly_by_protocol":   anomaly_by_proto,
+        "features_used":         features,
+        "stat_anomalies":        iqr_findings,
+        "anomalous_packets":     anomalous_packets,
+        "port_scan_suspects":    port_scan_suspects,
+        "syn_flood_suspects":    syn_flood_suspects,
+        "beaconing_suspects":    beaconing_suspects,
+        "dns_tunnel_suspects":   dns_tunnel_suspects,
+        "labels":                labels.tolist(),
+        "scores":                combined.tolist(),
+        "iso_scores":            iso_scores.tolist(),
+        "lof_scores":            lof_scores.tolist(),
     }
- 
- 
-def _iqr_detection(df):
+
+
+# ─────────────────────────────────────────────────────────────────
+# Contamination estimator
+# ─────────────────────────────────────────────────────────────────
+def _estimate_contamination(df: pd.DataFrame) -> float:
     """
-    Use IQR method to find outliers in key numeric columns.
-    Returns a list of findings — one per column that has outliers.
+    Heuristically estimate contamination from suspicious indicators.
+    Avoids the fixed 0.05 assumption.
     """
+    hints = 0
+    if "is_suspicious_port" in df.columns:
+        hints += df["is_suspicious_port"].sum()
+    if "flag_rst" in df.columns:
+        hints += df["flag_rst"].sum()
+    if "syn_no_ack" in df.columns:
+        hints += df["syn_no_ack"].sum()
+    n = max(len(df), 1)
+    est = min(max(hints / n, 0.02), 0.30)
+    return round(est, 4)
+
+
+# ─────────────────────────────────────────────────────────────────
+# IQR Outlier Detection
+# ─────────────────────────────────────────────────────────────────
+def _iqr_detection(df: pd.DataFrame) -> list:
     results = []
-    check_columns = ["packet_length", "ttl", "inter_arrival_time", "window_size"]
- 
-    for col in check_columns:
+    check = ["packet_length", "ttl", "inter_arrival_time", "window_size",
+             "flow_packet_count", "flow_bytes_total"]
+    for col in check:
         if col not in df.columns:
             continue
- 
         series = pd.to_numeric(df[col], errors="coerce").dropna()
         if len(series) < 10:
             continue
- 
-        Q1  = series.quantile(0.25)
-        Q3  = series.quantile(0.75)
+        Q1, Q3 = series.quantile(0.25), series.quantile(0.75)
         IQR = Q3 - Q1
- 
-        lower = Q1 - 1.5 * IQR
-        upper = Q3 + 1.5 * IQR
- 
-        outlier_count = int(((series < lower) | (series > upper)).sum())
- 
-        if outlier_count > 0:
+        if IQR == 0:
+            continue
+        lo, hi = Q1 - 1.5 * IQR, Q3 + 1.5 * IQR
+        n_out = int(((series < lo) | (series > hi)).sum())
+        if n_out > 0:
             results.append({
                 "feature":       col,
-                "outlier_count": outlier_count,
-                "normal_range":  f"{round(lower, 1)} – {round(upper, 1)}",
-                "mean":          round(float(series.mean()), 1),
+                "outlier_count": n_out,
+                "normal_range":  f"{round(lo,1)} – {round(hi,1)}",
+                "mean":          round(float(series.mean()), 2),
+                "median":        round(float(series.median()), 2),
             })
- 
     return results
- 
- 
-def _detect_port_scan(df):
-    """
-    Simple port scan detection:
-    If one source IP connects to many different destination ports,
-    it might be scanning for open ports.
-    Threshold: more than 15 unique destination ports from one IP.
-    """
+
+
+# ─────────────────────────────────────────────────────────────────
+# Port Scan Detection (horizontal + vertical)
+# ─────────────────────────────────────────────────────────────────
+def _detect_port_scan(df: pd.DataFrame) -> list:
     suspects = []
- 
     if "src_ip" not in df.columns or "dst_port" not in df.columns:
         return suspects
- 
-    grouped = df.groupby("src_ip")["dst_port"].nunique()
-    scanners = grouped[grouped > 15]
- 
-    for ip, port_count in scanners.items():
-        suspects.append({
-            "src_ip":          str(ip),
-            "unique_ports_hit": int(port_count),
-            "warning":         "Possible port scan"
-        })
- 
+
+    # Horizontal scan: one IP → many different ports on many hosts
+    by_src = df.groupby("src_ip").agg(
+        unique_dst_ports=("dst_port", "nunique"),
+        unique_dst_ips=("dst_ip",   "nunique"),
+        total_packets=("packet_number", "count"),
+    ).reset_index()
+
+    for _, row in by_src.iterrows():
+        ports = int(row["unique_dst_ports"])
+        hosts = int(row["unique_dst_ips"])
+        if ports > 15 or (ports > 8 and hosts > 3):
+            scan_type = "HORIZONTAL" if hosts > 5 else "VERTICAL"
+            suspects.append({
+                "src_ip":            str(row["src_ip"]),
+                "unique_ports_hit":  ports,
+                "unique_hosts_hit":  hosts,
+                "total_packets":     int(row["total_packets"]),
+                "scan_type":         scan_type,
+                "warning":           f"Possible {scan_type.lower()} port scan",
+            })
+
     return suspects
- 
- 
-def _empty_result(df):
-    """Return empty results when there is not enough data."""
+
+
+# ─────────────────────────────────────────────────────────────────
+# SYN Flood Detection
+# ─────────────────────────────────────────────────────────────────
+def _detect_syn_flood(df: pd.DataFrame) -> list:
+    suspects = []
+    if "syn_no_ack" not in df.columns or "src_ip" not in df.columns:
+        return suspects
+
+    syn_counts = (
+        df[df["syn_no_ack"] == 1]
+        .groupby("src_ip")
+        .size()
+        .reset_index(name="syn_count")
+    )
+    threshold = max(20, len(df) * 0.05)
+    for _, row in syn_counts.iterrows():
+        if row["syn_count"] >= threshold:
+            suspects.append({
+                "src_ip":    str(row["src_ip"]),
+                "syn_count": int(row["syn_count"]),
+                "warning":   "Possible SYN flood — high SYN-without-ACK rate",
+            })
+    return suspects
+
+
+# ─────────────────────────────────────────────────────────────────
+# Beaconing Detection (regular periodic connections = C2 hint)
+# ─────────────────────────────────────────────────────────────────
+def _detect_beaconing(df: pd.DataFrame) -> list:
+    suspects = []
+    if "src_ip" not in df.columns or "dst_ip" not in df.columns:
+        return suspects
+    if "timestamp" not in df.columns:
+        return suspects
+
+    grouped = df.groupby(["src_ip", "dst_ip"])
+    for (src, dst), grp in grouped:
+        if len(grp) < 6:
+            continue
+        times = grp["timestamp"].sort_values().values
+        iats  = np.diff(times)
+        if len(iats) < 5:
+            continue
+        cv = iats.std() / (iats.mean() + 1e-9)   # coefficient of variation
+        # Low CV = very regular intervals = beacon-like
+        if cv < 0.15 and iats.mean() > 5:
+            suspects.append({
+                "src_ip":        str(src),
+                "dst_ip":        str(dst),
+                "interval_mean_s": round(float(iats.mean()), 2),
+                "interval_cv":   round(float(cv), 4),
+                "connection_count": len(grp),
+                "warning":       "Possible beaconing / C2 (very regular connection intervals)",
+            })
+    return suspects[:10]   # cap at 10
+
+
+# ─────────────────────────────────────────────────────────────────
+# DNS Tunnelling Hint
+# ─────────────────────────────────────────────────────────────────
+def _detect_dns_tunnelling(df: pd.DataFrame) -> list:
+    suspects = []
+    dns_df = df[df["protocol"].isin(["DNS", "MDNS"])].copy()
+    if dns_df.empty:
+        return suspects
+
+    # Large DNS packets or unusually long query names
+    if "packet_length" in dns_df.columns:
+        large_dns = dns_df[dns_df["packet_length"] > 512]
+        if len(large_dns) > 0:
+            suspects.append({
+                "type":    "LARGE_DNS_PACKETS",
+                "count":   len(large_dns),
+                "warning": f"{len(large_dns)} DNS packets > 512 bytes (possible tunnelling)",
+            })
+
+    # High DNS query rate from single IP
+    if "src_ip" in dns_df.columns:
+        by_src = dns_df.groupby("src_ip").size()
+        for ip, cnt in by_src.items():
+            if cnt > 50:
+                suspects.append({
+                    "type":    "HIGH_DNS_RATE",
+                    "src_ip":  str(ip),
+                    "count":   int(cnt),
+                    "warning": f"{ip} made {cnt} DNS queries (unusual)",
+                })
+
+    return suspects
+
+
+# ─────────────────────────────────────────────────────────────────
+def _empty_result(df: pd.DataFrame) -> dict:
+    n = len(df)
     return {
-        "anomaly_count":       0,
-        "normal_count":        len(df),
-        "total_packets":       len(df),
-        "anomaly_percentage":  0.0,
-        "anomaly_by_protocol": {},
-        "features_used":       [],
-        "stat_anomalies":      [],
-        "anomalous_packets":   [],
-        "port_scan_suspects":  [],
-        "labels":              [1] * len(df),
-        "scores":              [0.0] * len(df),
+        "anomaly_count": 0, "normal_count": n, "total_packets": n,
+        "anomaly_percentage": 0.0, "contamination_estimate": 0.05,
+        "anomaly_by_protocol": {}, "features_used": [],
+        "stat_anomalies": [], "anomalous_packets": [],
+        "port_scan_suspects": [], "syn_flood_suspects": [],
+        "beaconing_suspects": [], "dns_tunnel_suspects": [],
+        "labels": [1] * n, "scores": [0.0] * n,
+        "iso_scores": [0.0] * n, "lof_scores": [0.0] * n,
     }
