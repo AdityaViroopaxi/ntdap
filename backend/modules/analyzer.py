@@ -1,4 +1,4 @@
-# analyzer.py — NTDAP v3.0 Advanced Anomaly Detection Engine
+# analyzer.py — NTDAP v4.0 Advanced Anomaly Detection Engine
 #
 # Detection methods (stacked ensemble):
 #   1. Isolation Forest (ML) — general multivariate anomaly detection

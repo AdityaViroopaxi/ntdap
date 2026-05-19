@@ -1,5 +1,5 @@
 -- NTDAP v4.0 — Auth Migration SQL
--- Run this ONLY if you're upgrading from v3 (existing DB).
+-- Run this ONLY if you're upgrading from v4 (existing DB).
 -- If starting fresh, init_auth_db() handles everything automatically.
 
 USE ntdap_db;

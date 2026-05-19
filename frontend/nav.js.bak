@@ -1,4 +1,4 @@
-// nav.js — NTDAP v3.0 shared navigation + utilities
+// nav.js — NTDAP v4.0 shared navigation + utilities
 
 function renderNav(activePage) {
   const pages = [

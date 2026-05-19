@@ -1,4 +1,4 @@
-# parser.py — NTDAP v3.0 Advanced Packet Parser
+# parser.py — NTDAP v4.0 Advanced Packet Parser
 # Extracts 35+ features per packet for high-accuracy ML detection.
 # Supports: TCP, UDP, ICMP, ARP, DNS, DHCP, HTTP, HTTPS, SSH, FTP,
 #           SMTP, RDP, Telnet, NTP, SNMP, SMB, MYSQL, REDIS and more.

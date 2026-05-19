@@ -1,4 +1,4 @@
-# cleaner.py — NTDAP v3.0 Advanced Data Cleaner
+# cleaner.py — NTDAP v4.0 Advanced Data Cleaner
 # - Smarter deduplication (timestamp + src + dst + len, not all cols)
 # - Fills missing IPs with "Unknown" instead of dropping
 # - Validates and clips extreme values (outlier TTL, window_size, etc.)

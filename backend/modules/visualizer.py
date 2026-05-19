@@ -1,4 +1,4 @@
-# visualizer.py — NTDAP v3.0  (charts encoded as base64 so no CORS issues)
+# visualizer.py — NTDAP v4.0  (charts encoded as base64 so no CORS issues)
 import os, base64, io, numpy as np, pandas as pd
 import matplotlib
 matplotlib.use("Agg")

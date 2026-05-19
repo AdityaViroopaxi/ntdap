@@ -248,7 +248,7 @@ def ai_analyze():
     for attempt in range(3):
         try:
             resp = requests.post(url, headers={"Content-Type":"application/json"},
-                json={"contents":[{"parts":[{"text":prompt}]}],"generationConfig":{"temperature":0.3,"maxOutputTokens":2048}}, timeout=60)
+                json={"contents":[{"parts":[{"text":prompt}]}],"generationConfig":{"temperature":0.3,"maxOutputTokens":16348}}, timeout=100)
             if resp.status_code == 200:
                 ai_text = resp.json().get("candidates",[{}])[0].get("content",{}).get("parts",[{}])[0].get("text","No response.")
                 return jsonify({"success":True,"analysis":ai_text})

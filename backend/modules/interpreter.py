@@ -1,4 +1,4 @@
-# interpreter.py — NTDAP v3.0 Advanced Traffic Interpreter
+# interpreter.py — NTDAP v4.0 Advanced Traffic Interpreter
 # Generates rich plain-English findings across 8 analysis dimensions.
 
 from datetime import datetime

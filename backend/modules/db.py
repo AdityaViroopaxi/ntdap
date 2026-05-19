@@ -1,4 +1,4 @@
-# db.py — NTDAP v3.0 Advanced MySQL Database Module
+# db.py — NTDAP v4.0 Advanced MySQL Database Module
 # Extended schema with threat alerts, flow table, and session tagging.
 
 import os
@@ -142,7 +142,7 @@ def init_db():
     conn.commit()
     cur.close()
     conn.close()
-    print("✅ MySQL DB v3.0 initialized.")
+    print("✅ MySQL DB v4.0 initialized.")
 
 
 def save_session(filename, stats, anomaly_results, clean_df, labels, user_id):
