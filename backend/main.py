@@ -62,6 +62,25 @@ def _get_token():
     return request.headers.get("X-Auth-Token", "")
 
 
+
+
+@app.route("/")
+def home():
+    return send_from_directory("static", "index.html")
+
+@app.route("/login")
+def login_page():
+    return send_from_directory("static", "login.html")
+
+@app.route("/upload-page")
+def upload_page():
+    return send_from_directory("static", "upload.html")
+
+@app.route("/admin")
+def admin_page():
+    return send_from_directory("static", "admin.html")
+
+
 @app.route("/")
 def home():
     return jsonify({"status": "NTDAP v4.0", "version": "4.0.0", "auth": True})
