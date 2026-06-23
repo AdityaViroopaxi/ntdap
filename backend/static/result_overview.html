@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Overview — NTDAP v4</title>
+  <link rel="stylesheet" href="shared.css"/>
+  <style>
+    .hero-panel{display:grid;grid-template-columns:1fr auto;gap:28px;align-items:start;
+      background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+      padding:28px 32px;margin-bottom:24px}
+    .risk-ring{width:108px;height:108px;border-radius:50%;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;border:3px solid;flex-shrink:0}
+    .risk-num{font-size:30px;font-weight:900;font-family:'JetBrains Mono',monospace;line-height:1}
+    .risk-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:2px}
+    .threat-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+    .threat-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:6px;
+      font-size:11px;font-weight:700;letter-spacing:.04em}
+    .threat-chip.active{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.35)}
+    .threat-chip.clear {background:rgba(16,185,129,.1); color:var(--accent3);border:1px solid rgba(16,185,129,.25)}
+    .interp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:20px}
+    .interp-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px}
+    .interp-card h4{font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;
+      letter-spacing:.06em;margin-bottom:8px}
+    .interp-card p{font-size:13px;color:var(--muted);line-height:1.7}
+    .pairs-row{display:grid;grid-template-columns:1fr auto 1fr auto;gap:10px;align-items:center;
+      padding:9px 0;border-bottom:1px solid rgba(33,38,45,.5);font-size:12px}
+    .pairs-row:last-child{border-bottom:none}
+  </style>
+</head>
+<body>
+<div id="navMount"></div>
+<div class="page-wrap" id="content">
+  <div style="text-align:center;padding:80px;color:var(--muted)">Loading…</div>
+</div>
+<script src="nav.js"></script>
+<script>
+const token = localStorage.getItem("ntdap_token");
+
+if (!token) {
+    window.location.href = "login.html";
+}
+
+document.getElementById("navMount").innerHTML = renderNav("overview");
+const data = getResult();
+
+if (data) {
+    build(data);
+} else {
+    document.getElementById("content").innerHTML = `
+        <div style="text-align:center;padding:80px;">
+            <h2>No analysis result found</h2>
+            <p style="color:var(--muted);margin-top:10px;">
+                Please upload and analyze a PCAP file first.
+            </p>
+            <br>
+            <a href="upload.html"
+               style="
+                    background:var(--accent);
+                    color:#000;
+                    padding:12px 25px;
+                    border-radius:8px;
+                    text-decoration:none;
+                    font-weight:bold;
+               ">
+               Upload PCAP →
+            </a>
+        </div>
+    `;
+}
+
+function build(d) {
+  const s   = d.statistics    || {};
+  const a   = d.anomalies     || {};
+  const i   = d.interpretation || {};
+  const sev = i.severity      || "NORMAL";
+  const sColor = severityColor(sev);
+  const sevScore = i.severity_score || 0;
+
+  // Risk ring score (0–100)
+  const riskScore = Math.min(100, Math.round(
+    (a.anomaly_percentage || 0) * 2.5 +
+    (a.port_scan_suspects?.length ? 20 : 0) +
+    (a.syn_flood_suspects?.length ? 20 : 0) +
+    (a.beaconing_suspects?.length ? 15 : 0) +
+    (a.dns_tunnel_suspects?.length ? 10 : 0)
+  ));
+
+  let h = `
+    <div class="page-header">
+      <div class="file-badge">📄 ${d.filename}</div>
+      <h1>Analysis Overview</h1>
+      <p>Complete summary of NTDAP v4.0 analysis — ${new Date().toLocaleString()}</p>
+    </div>
+
+    <div class="hero-panel">
+      <div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+          ${severityBadge(sev)}
+          <span style="font-size:13px;color:var(--muted)">Severity Score: <strong style="color:var(--text)">${sevScore}</strong></span>
+        </div>
+        <p style="font-size:15px;color:var(--muted);line-height:1.8;max-width:680px;margin-bottom:16px">${i.summary || "—"}</p>
+        <div class="threat-row">
+          <span class="threat-chip ${a.port_scan_suspects?.length ? 'active' : 'clear'}">${a.port_scan_suspects?.length ? '🔴' : '✅'} Port Scan</span>
+          <span class="threat-chip ${a.syn_flood_suspects?.length ? 'active' : 'clear'}">${a.syn_flood_suspects?.length ? '🔴' : '✅'} SYN Flood</span>
+          <span class="threat-chip ${a.beaconing_suspects?.length ? 'active' : 'clear'}">${a.beaconing_suspects?.length ? '🔴' : '✅'} Beaconing</span>
+          <span class="threat-chip ${a.dns_tunnel_suspects?.length ? 'active' : 'clear'}">${a.dns_tunnel_suspects?.length ? '🔴' : '✅'} DNS Tunnel</span>
+          <span class="threat-chip ${(s.suspicious_port_count||0)>0 ? 'active' : 'clear'}">${(s.suspicious_port_count||0)>0 ? '⚠️' : '✅'} Suspicious Ports</span>
+        </div>
+      </div>
+      <div style="text-align:center">
+        <div class="risk-ring" style="border-color:${sColor}">
+          <div class="risk-num" style="color:${sColor}">${riskScore}</div>
+          <div class="risk-lbl">Risk Score</div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:6px">out of 100</div>
+      </div>
+    </div>`;
+
+  // Stat grid
+  h += `<div class="stat-grid">
+    ${statCard("Total Packets",    fmt(s.total_packets),         "accent")}
+    ${statCard("Total Data",       fmtBytes(s.total_bytes),      "accent")}
+    ${statCard("Duration",         (s.capture_duration_seconds||0)+"s")}
+    ${statCard("Pkt/sec",          s.packets_per_second||0,      "", fmtBytes(s.bytes_per_second||0)+"/s")}
+    ${statCard("Protocols",        s.protocol_count||"—",        "purple")}
+    ${statCard("Unique Flows",     fmt(s.unique_flows),          "purple")}
+    ${statCard("Unique Src IPs",   fmt(s.unique_src_ips))}
+    ${statCard("Anomalies",        fmt(a.anomaly_count),         a.anomaly_count>0 ? "red" : "green", (a.anomaly_percentage||0)+"%")}
+  </div>`;
+
+  // Threat alerts
+  const threats = i.threat_indicators || [];
+  if (threats.length > 0) {
+    h += `<div class="section-block"><div class="section-title"><span class="dot" style="background:var(--danger)"></span>Active Threat Indicators</div>`;
+    threats.forEach(t => {
+      h += `<div class="alert-card danger" style="margin-bottom:8px">
+        <span class="alert-icon">🚨</span>
+        <div><div class="alert-title">${t}</div></div>
+      </div>`;
+    });
+    h += `</div>`;
+  }
+
+  // Interpretation grid
+  h += `<div class="section-block">
+    <div class="section-title"><span class="dot"></span>Traffic Interpretation</div>
+    <div class="interp-grid">`;
+  const interps = [
+    ["Protocol Breakdown",   i.protocol_breakdown],
+    ["Packet Size",          i.packet_size_analysis],
+    ["Network Type",         i.network_type],
+    ["Traffic Pattern",      i.traffic_pattern],
+    ["TCP Flags",            i.tcp_flag_analysis],
+    ["DNS Insights",         i.dns_insights],
+    ["HTTP Insights",        i.http_insights],
+    ["Anomaly Analysis",     i.anomaly_analysis],
+  ];
+  interps.forEach(([title, text]) => {
+    if (text) h += `<div class="interp-card"><h4>${title}</h4><p>${text}</p></div>`;
+  });
+  h += `</div></div>`;
+
+  if (i.suspicious_ports_note) {
+    h += `<div class="alert-card warn"><span class="alert-icon">⚠️</span>
+      <div><div class="alert-title">Suspicious Ports</div><div class="alert-body">${i.suspicious_ports_note}</div></div></div>`;
+  }
+
+  // Recommendation
+  h += `<div class="alert-card ${sev==='HIGH'||sev==='CRITICAL' ? 'danger' : sev==='MEDIUM' ? 'warn' : 'success'}" style="margin-top:8px">
+    <span class="alert-icon">💡</span>
+    <div><div class="alert-title">Recommendation</div><div class="alert-body">${i.recommendation||"No immediate action required."}</div></div>
+  </div>`;
+
+  // Top pairs
+  if (s.top_pairs?.length) {
+    h += `<div class="section-block" style="margin-top:20px">
+      <div class="section-title"><span class="dot"></span>Top Communication Pairs</div>
+      <div class="table-wrap"><table>
+        <tr><th>#</th><th>Source</th><th></th><th>Destination</th><th>Packets</th><th>Bytes</th></tr>`;
+    s.top_pairs.forEach((p, idx) => {
+      h += `<tr>
+        <td class="td-dim">${idx+1}</td>
+        <td class="mono">${p.src}</td>
+        <td style="color:var(--muted);text-align:center">→</td>
+        <td class="mono">${p.dst}</td>
+        <td class="mono text-accent">${fmt(p.count)}</td>
+        <td class="mono td-dim">${fmtBytes(p.bytes||0)}</td>
+      </tr>`;
+    });
+    h += `</table></div></div>`;
+  }
+
+  h += navRow("upload.html","← Upload New","result_traffic.html","Traffic Analysis →");
+  document.getElementById("content").innerHTML = h;
+}
+</script>
+</body></html>

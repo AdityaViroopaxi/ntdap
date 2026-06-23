@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Upload — NTDAP v4</title>
+  <link rel="stylesheet" href="shared.css"/>
+  <style>
+    .upload-wrap{max-width:680px;margin:0 auto;padding:40px 0 80px}
+    .upload-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:36px}
+    .drop-zone{border:2px dashed var(--border);border-radius:12px;padding:48px 24px;text-align:center;
+      cursor:pointer;transition:all .25s;margin-bottom:24px}
+    .drop-zone:hover,.drop-zone.drag{border-color:var(--accent);background:rgba(0,212,255,.04)}
+    .drop-icon{font-size:48px;margin-bottom:12px;display:block}
+    .drop-title{font-size:16px;font-weight:700;margin-bottom:6px}
+    .drop-sub{font-size:13px;color:var(--muted)}
+    .file-chosen{background:var(--surface2);border:1px solid var(--border);border-radius:9px;
+      padding:12px 16px;display:flex;align-items:center;gap:12px;margin-bottom:20px;display:none}
+    .file-chosen-name{font-family:'JetBrains Mono',monospace;font-size:13px;flex:1;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .file-chosen-size{font-size:12px;color:var(--muted);flex-shrink:0}
+    .upload-btn{width:100%;padding:15px;background:linear-gradient(135deg,var(--accent2),var(--accent));
+      color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;
+      font-family:'Space Grotesk',sans-serif;cursor:pointer;transition:all .2s;
+      display:flex;align-items:center;justify-content:center;gap:10px}
+    .upload-btn:disabled{background:var(--surface2);color:var(--muted);cursor:not-allowed}
+    .upload-btn:not(:disabled):hover{transform:translateY(-2px);box-shadow:0 10px 32px rgba(0,212,255,.25)}
+    .progress-wrap{margin-top:20px;display:none}
+    .progress-track{background:var(--surface2);border-radius:100px;height:6px;overflow:hidden;border:1px solid var(--border);margin-bottom:8px}
+    .progress-fill{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));
+      border-radius:100px;width:0;transition:width .3s}
+    .progress-label{font-size:12px;color:var(--muted);text-align:center}
+    .steps{display:flex;flex-direction:column;gap:8px;margin-top:20px;display:none}
+    .step{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);transition:color .3s}
+    .step.done{color:var(--accent3)}
+    .step.active{color:var(--accent)}
+    .step-dot{width:8px;height:8px;border-radius:50%;background:var(--border);flex-shrink:0;transition:background .3s}
+    .step.done .step-dot{background:var(--accent3)}
+    .step.active .step-dot{background:var(--accent)}
+    .err-card{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.28);border-radius:10px;
+      padding:14px 18px;margin-top:16px;font-size:13px;color:var(--danger);display:none;line-height:1.6}
+    .features{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:24px}
+    .feat-item{display:flex;align-items:flex-start;gap:9px;background:var(--surface2);
+      border:1px solid var(--border);border-radius:9px;padding:12px 14px}
+    .feat-icon{font-size:18px;flex-shrink:0;margin-top:1px}
+    .feat-title{font-size:12px;font-weight:700;color:var(--text);margin-bottom:2px}
+    .feat-desc{font-size:11px;color:var(--muted)}
+  </style>
+</head>
+<body>
+<div id="navMount"></div>
+
+<div class="page-wrap upload-wrap">
+  <div class="page-header" style="text-align:center">
+    <h1>Upload PCAP File</h1>
+    <p>Drag &amp; drop or browse · Supports .pcap · .pcapng · .cap</p>
+  </div>
+
+  <div class="upload-card">
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()"
+         ondragover="ev(event,'drag')" ondragleave="ev(event,'')" ondrop="onDrop(event)">
+      <span class="drop-icon">📡</span>
+      <div class="drop-title">Drop your PCAP file here</div>
+      <div class="drop-sub">or click to browse · max 100 MB</div>
+    </div>
+    <input type="file" id="fileInput" accept=".pcap,.pcapng,.cap" style="display:none" onchange="onFile(this.files[0])"/>
+
+    <div class="file-chosen" id="fileChosen">
+      <span>📄</span>
+      <span class="file-chosen-name" id="chosenName">—</span>
+      <span class="file-chosen-size" id="chosenSize">—</span>
+      <button onclick="clearFile()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:0">✕</button>
+    </div>
+
+    <button class="upload-btn" id="uploadBtn" disabled onclick="doUpload()">
+      <span>🚀</span> Analyse Traffic
+    </button>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-label" id="progressLabel">Uploading…</div>
+    </div>
+
+    <div class="steps" id="stepsWrap" style="display:flex">
+      <div class="step" id="s1"><div class="step-dot"></div>Parse PCAP — extract 35+ features</div>
+      <div class="step" id="s2"><div class="step-dot"></div>Clean &amp; engineer features</div>
+      <div class="step" id="s3"><div class="step-dot"></div>Run ML ensemble (Isolation Forest + LOF)</div>
+      <div class="step" id="s4"><div class="step-dot"></div>Port scan · SYN flood · beaconing · DNS tunnel detection</div>
+      <div class="step" id="s5"><div class="step-dot"></div>Generate 10 dark-theme charts</div>
+      <div class="step" id="s6"><div class="step-dot"></div>Interpret results &amp; save to MySQL</div>
+    </div>
+
+    <div class="err-card" id="errCard"></div>
+  </div>
+
+  <div class="features">
+    <div class="feat-item"><div class="feat-icon">🤖</div><div><div class="feat-title">ML Ensemble Detection</div><div class="feat-desc">Isolation Forest + Local Outlier Factor with dynamic contamination estimation</div></div></div>
+    <div class="feat-item"><div class="feat-icon">🔍</div><div><div class="feat-title">Threat Heuristics</div><div class="feat-desc">Port scan, SYN flood, beaconing/C2, DNS tunnelling detection</div></div></div>
+    <div class="feat-item"><div class="feat-icon">📊</div><div><div class="feat-title">10 Dark Charts</div><div class="feat-desc">Heatmaps, scatter plots, timelines, flow analysis — all dark-themed</div></div></div>
+    <div class="feat-item"><div class="feat-icon">✨</div><div><div class="feat-title">Gemini AI Analyst</div><div class="feat-desc">Expert-level security insights with MITRE ATT&CK mapping</div></div></div>
+    <div class="feat-item"><div class="feat-icon">🗄️</div><div><div class="feat-title">MySQL Persistence</div><div class="feat-desc">Full session history, threat alerts, packet storage</div></div></div>
+    <div class="feat-item"><div class="feat-icon">📦</div><div><div class="feat-title">35+ Features/Packet</div><div class="feat-desc">Flow stats, DNS queries, HTTP methods, TCP flags, payload entropy</div></div></div>
+  </div>
+</div>
+
+<script>
+const API = "http://localhost:5000";
+let chosenFile = null;
+
+function ev(e, cls) { e.preventDefault(); document.getElementById("dropZone").className = "drop-zone " + cls; }
+function onDrop(e) { e.preventDefault(); document.getElementById("dropZone").className = "drop-zone"; onFile(e.dataTransfer.files[0]); }
+
+function onFile(f) {
+  if (!f) return;
+  const ok = [".pcap",".pcapng",".cap"].some(x => f.name.toLowerCase().endsWith(x));
+  if (!ok) { showErr("Unsupported file type. Please use .pcap, .pcapng or .cap"); return; }
+  chosenFile = f;
+  document.getElementById("chosenName").textContent = f.name;
+  document.getElementById("chosenSize").textContent = fmtSize(f.size);
+  document.getElementById("fileChosen").style.display = "flex";
+  document.getElementById("uploadBtn").disabled = false;
+  document.getElementById("errCard").style.display = "none";
+}
+
+function clearFile() {
+  chosenFile = null;
+  document.getElementById("fileInput").value = "";
+  document.getElementById("fileChosen").style.display = "none";
+  document.getElementById("uploadBtn").disabled = true;
+}
+
+function fmtSize(b) {
+  if (b < 1024) return b+" B";
+  if (b < 1048576) return (b/1024).toFixed(1)+" KB";
+  return (b/1048576).toFixed(2)+" MB";
+}
+
+function showErr(msg) {
+  const el = document.getElementById("errCard");
+  el.textContent = "⚠ " + msg;
+  el.style.display = "block";
+}
+
+const STEPS = ["s1","s2","s3","s4","s5","s6"];
+const STEP_MS = [1500,2500,4000,5500,7500,9000];
+
+function animateSteps() {
+  STEPS.forEach((id, i) => {
+    setTimeout(() => {
+      if (i > 0) document.getElementById(STEPS[i-1]).className = "step done";
+      document.getElementById(id).className = "step active";
+    }, STEP_MS[i]);
+  });
+}
+
+async function doUpload() {
+  if (!chosenFile) return;
+  const btn = document.getElementById("uploadBtn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;display:inline-block"></span> Analysing…';
+  document.getElementById("progressWrap").style.display = "block";
+  document.getElementById("errCard").style.display = "none";
+  animateSteps();
+
+  // Progress bar animation
+  let pct = 0;
+  const pbar = document.getElementById("progressFill");
+  const plbl = document.getElementById("progressLabel");
+  const interval = setInterval(() => {
+    pct = Math.min(pct + Math.random()*4, 90);
+    pbar.style.width = pct + "%";
+    if (pct < 30) plbl.textContent = "Parsing PCAP…";
+    else if (pct < 55) plbl.textContent = "Running ML detection…";
+    else if (pct < 75) plbl.textContent = "Detecting threats…";
+    else plbl.textContent = "Generating charts…";
+  }, 400);
+
+  const fd = new FormData();
+  fd.append("file", chosenFile);
+
+  try {
+    const _tok = localStorage.getItem("ntdap_token");
+    if (!_tok) { window.location.href = "login.html"; return; }
+    const resp = await fetch(API + "/upload", { method:"POST", body:fd, headers:{"Authorization":"Bearer "+_tok} });
+    clearInterval(interval);
+    pbar.style.width = "100%";
+    plbl.textContent = "Complete!";
+
+    STEPS.forEach(id => document.getElementById(id).className = "step done");
+
+    const json = await resp.json();
+    if (!json.success) { showErr(json.error || "Upload failed."); btn.disabled = false; btn.innerHTML = "<span>🚀</span> Analyse Traffic"; return; }
+
+    sessionStorage.setItem("ntdap_result", JSON.stringify(json));
+    setTimeout(() => { window.location.href = "result_overview.html"; }, 500);
+
+  } catch(e) {
+    clearInterval(interval);
+    showErr("Cannot connect to backend. Ensure Flask is running on http://localhost:5000");
+    btn.disabled = false;
+    btn.innerHTML = "<span>🚀</span> Analyse Traffic";
+  }
+}
+</script>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
+<script src="nav.js"></script>
+<script>
+document.getElementById("navMount").innerHTML = renderNav("upload");
+</script>
+</body></html>

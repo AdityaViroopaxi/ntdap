@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Traffic Analysis — NTDAP v4</title>
+  <link rel="stylesheet" href="shared.css"/>
+  <style>
+    .proto-bar-row{display:grid;grid-template-columns:130px 1fr 110px;gap:14px;align-items:center;margin-bottom:10px}
+    .bar-track{background:var(--surface2);border-radius:100px;height:8px;overflow:hidden;border:1px solid var(--border)}
+    .bar-fill{height:100%;border-radius:100px;background:linear-gradient(90deg,var(--accent),var(--accent2));width:0;transition:width 1.3s cubic-bezier(.4,0,.2,1)}
+    .proto-count{text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted)}
+    .enrich-label{display:inline-block;font-size:10px;background:var(--surface2);border:1px solid var(--border);
+      border-radius:4px;padding:1px 6px;color:var(--muted);margin-left:4px}
+    .flag-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
+    .flag-card{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:14px;text-align:center}
+    .flag-name{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+    .flag-val{font-size:20px;font-weight:800;font-family:'JetBrains Mono',monospace}
+  </style>
+</head>
+<body>
+<div id="navMount"></div>
+<div class="page-wrap" id="content">
+  <div style="text-align:center;padding:80px;color:var(--muted)">Loading…</div>
+</div>
+<script src="nav.js"></script>
+<script>
+const token = localStorage.getItem("ntdap_token");
+
+if (!token) {
+    window.location.href = "login.html";
+}
+
+document.getElementById("navMount").innerHTML = renderNav("traffic");
+const data = getResult();
+
+if (data) {
+    build(data);
+} else {
+    document.getElementById("content").innerHTML = `
+        <div style="text-align:center;padding:80px;">
+            <h2>No traffic analysis data found</h2>
+            <p style="color:var(--muted);margin-top:10px;">
+                Please upload and analyze a PCAP file first.
+            </p>
+            <br>
+            <a href="upload.html"
+               style="
+                   background:var(--accent);
+                   color:#000;
+                   padding:12px 25px;
+                   border-radius:8px;
+                   text-decoration:none;
+                   font-weight:bold;
+               ">
+               Upload PCAP →
+            </a>
+        </div>
+    `;
+}
+
+function build(d) {
+  const s     = d.statistics    || {};
+  const total = s.total_packets || 1;
+  const enr   = d.ip_enrichment || {};
+
+  let h = `
+    <div class="page-header">
+      <div class="file-badge">📄 ${d.filename}</div>
+      <h1>Traffic Analysis</h1>
+      <p>Protocol distribution · IP addresses · Ports · Flow statistics</p>
+    </div>`;
+
+  // Stat row
+  h += `<div class="stat-grid">
+    ${statCard("Total Packets",   fmt(s.total_packets),           "accent")}
+    ${statCard("Total Data",      fmtBytes(s.total_bytes),        "accent")}
+    ${statCard("Duration",        (s.capture_duration_seconds||0)+"s", "", fmt(s.packets_per_second||0)+" pkt/s")}
+    ${statCard("Throughput",      fmtBytes(s.bytes_per_second||0)+"/s")}
+    ${statCard("Unique Src IPs",  fmt(s.unique_src_ips),          "purple")}
+    ${statCard("Unique Dst IPs",  fmt(s.unique_dst_ips),          "purple")}
+    ${statCard("Unique Flows",    fmt(s.unique_flows),            "")}
+    ${statCard("Avg Pkt Size",    (s.avg_packet_size||0)+" B",    "", "p95: "+(s.p95_packet_size||0)+" B")}
+  </div>`;
+
+  // Protocol distribution
+  const protos = Object.entries(s.protocol_distribution || {}).sort((a,b)=>b[1]-a[1]);
+  const maxP   = protos[0]?.[1] || 1;
+  h += `<div class="section-block">
+    <div class="section-title"><span class="dot"></span>Protocol Distribution (${s.protocol_count||0} protocols)</div>`;
+  protos.forEach(([proto, count]) => {
+    const pct = ((count/total)*100).toFixed(1);
+    const w   = ((count/maxP)*100).toFixed(1);
+    h += `<div class="proto-bar-row">
+      <span>${protoBadge(proto)}</span>
+      <div class="bar-track"><div class="bar-fill" data-w="${w}"></div></div>
+      <span class="proto-count">${fmt(count)} <span style="opacity:.5">(${pct}%)</span></span>
+    </div>`;
+  });
+  h += `</div>`;
+
+  // Protocol category breakdown
+  h += `<div class="stat-grid">
+    ${statCard("TCP-Based",   fmt(s.tcp_based_count),  "accent")}
+    ${statCard("UDP-Based",   fmt(s.udp_based_count),  "purple")}
+    ${statCard("ICMP",        fmt(s.icmp_count),        "warn")}
+    ${statCard("ARP",         fmt(s.arp_count))}
+    ${statCard("DNS Queries", fmt(s.dns_query_count||0),"purple")}
+    ${statCard("HTTP Reqs",   fmt(s.http_request_count||0))}
+    ${statCard("Susp. Ports", fmt(s.suspicious_port_count||0), (s.suspicious_port_count||0)>0?"red":"")}
+    ${statCard("Avg IAT",     (s.avg_inter_arrival_ms||0)+" ms")}
+  </div>`;
+
+  // TCP flags
+  const flagColors = {SYN:"var(--accent)",ACK:"var(--accent3)",FIN:"var(--accent2)",RST:"var(--danger)",PSH:"var(--warn)",URG:"var(--pink)"};
+  const flags = [
+    ["SYN",s.flag_syn_count], ["ACK",s.flag_ack_count], ["FIN",s.flag_fin_count],
+    ["RST",s.flag_rst_count], ["PSH",s.flag_psh_count]
+  ].filter(([,v])=>v>0);
+  if (flags.length) {
+    h += `<div class="section-block">
+      <div class="section-title"><span class="dot"></span>TCP Flag Breakdown</div>
+      <div class="flag-grid">`;
+    flags.forEach(([name, val]) => {
+      h += `<div class="flag-card">
+        <div class="flag-name">${name}</div>
+        <div class="flag-val" style="color:${flagColors[name]||'var(--text)'}">${fmt(val)}</div>
+      </div>`;
+    });
+    h += `</div>`;
+    if (d.interpretation?.tcp_flag_analysis) {
+      h += `<div class="alert-card info" style="margin-top:14px">
+        <span class="alert-icon">ℹ️</span>
+        <div class="alert-body">${d.interpretation.tcp_flag_analysis}</div>
+      </div>`;
+    }
+    h += `</div>`;
+  }
+
+  // Two-col: Source IPs + Dest IPs
+  h += `<div class="two-col">`;
+
+  // Source IPs
+  h += `<div class="section-block">
+    <div class="section-title"><span class="dot"></span>Top Source IPs</div>
+    <div class="table-wrap"><table>
+      <tr><th>IP Address</th><th>Label</th><th>Packets</th><th>%</th></tr>`;
+  Object.entries(s.top_source_ips||{}).forEach(([ip,cnt]) => {
+    const pct   = ((cnt/total)*100).toFixed(1);
+    const label = enr[ip]?.label || "External";
+    h += `<tr>
+      <td class="mono">${ip}</td>
+      <td><span class="enrich-label">${label}</span></td>
+      <td class="mono text-accent">${fmt(cnt)}</td>
+      <td class="mono td-dim">${pct}%</td>
+    </tr>`;
+  });
+  h += `</table></div></div>`;
+
+  // Dest IPs
+  h += `<div class="section-block">
+    <div class="section-title"><span class="dot"></span>Top Destination IPs</div>
+    <div class="table-wrap"><table>
+      <tr><th>IP Address</th><th>Packets</th><th>%</th></tr>`;
+  Object.entries(s.top_destination_ips||{}).forEach(([ip,cnt]) => {
+    const pct = ((cnt/total)*100).toFixed(1);
+    h += `<tr>
+      <td class="mono">${ip}</td>
+      <td class="mono text-accent">${fmt(cnt)}</td>
+      <td class="mono td-dim">${pct}%</td>
+    </tr>`;
+  });
+  h += `</table></div></div>`;
+  h += `</div>`;
+
+  // Ports
+  const PORT_NAMES = {"80":"HTTP","443":"HTTPS","22":"SSH","21":"FTP","23":"TELNET","53":"DNS","67":"DHCP","3306":"MySQL","5432":"PostgreSQL","6379":"Redis","8080":"HTTP-Alt","25":"SMTP","3389":"RDP","445":"SMB","161":"SNMP","123":"NTP","4444":"⚠ Meterpreter","1337":"⚠ Suspicious","6667":"⚠ IRC-C2"};
+  const RISKY = new Set(["23","21","445","3389","5900","4444","1337","6667","31337","12345"]);
+  const SAFE  = new Set(["443","22","53","123"]);
+  h += `<div class="section-block">
+    <div class="section-title"><span class="dot"></span>Top Destination Ports</div>
+    <div class="table-wrap"><table>
+      <tr><th>Port</th><th>Service</th><th>Packets</th><th>% of Total</th><th>Risk</th></tr>`;
+  Object.entries(s.top_destination_ports||{}).forEach(([port, cnt]) => {
+    const pct   = ((cnt/total)*100).toFixed(1);
+    const svc   = PORT_NAMES[port] || "Unknown";
+    const risky = RISKY.has(port);
+    const safe  = SAFE.has(port);
+    h += `<tr>
+      <td class="mono text-accent">${port}</td>
+      <td class="mono">${svc}</td>
+      <td class="mono">${fmt(cnt)}</td>
+      <td class="mono td-dim">${pct}%</td>
+      <td>${risky ? '<span class="badge badge-red">High Risk</span>' : safe ? '<span class="badge badge-green">Safe</span>' : '<span class="badge badge-gray">Normal</span>'}</td>
+    </tr>`;
+  });
+  h += `</table></div></div>`;
+
+  // DNS top queries
+  if (s.top_dns_queries && Object.keys(s.top_dns_queries).length) {
+    h += `<div class="section-block">
+      <div class="section-title"><span class="dot"></span>Top DNS Queries (${fmt(s.dns_query_count)} total · ${fmt(s.unique_dns_queries)} unique)</div>
+      <div class="table-wrap"><table>
+        <tr><th>Domain</th><th>Count</th></tr>`;
+    Object.entries(s.top_dns_queries).forEach(([dom, cnt]) => {
+      h += `<tr><td class="mono">${dom}</td><td class="mono text-accent">${fmt(cnt)}</td></tr>`;
+    });
+    h += `</table></div></div>`;
+  }
+
+  // Network type
+  if (s.private_pct != null) {
+    h += `<div class="stat-grid">
+      ${statCard("Private/LAN Pkts",  fmt(s.private_ip_count),  "green")}
+      ${statCard("Public/WAN Pkts",   fmt(s.public_ip_count),   "accent")}
+      ${statCard("LAN %",             s.private_pct+"%")}
+      ${statCard("Payload %",         (s.payload_pct||0)+"%")}
+    </div>`;
+    if (d.interpretation?.network_type) {
+      h += `<div class="alert-card info" style="margin-bottom:12px">
+        <span class="alert-icon">🌐</span>
+        <div class="alert-body">${d.interpretation.network_type}</div>
+      </div>`;
+    }
+  }
+
+  h += navRow("result_overview.html","← Overview","result_security.html","Security →");
+  document.getElementById("content").innerHTML = h;
+
+  requestAnimationFrame(() => {
+    document.querySelectorAll(".bar-fill[data-w]").forEach(el => {
+      el.style.width = el.getAttribute("data-w") + "%";
+    });
+  });
+}
+</script>
+</body></html>

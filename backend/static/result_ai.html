@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>AI Analyst — NTDAP v4</title>
+  <link rel="stylesheet" href="shared.css"/>
+  <style>
+    .ai-hero{background:linear-gradient(135deg,rgba(124,58,237,.1),rgba(0,212,255,.06));
+      border:1px solid rgba(124,58,237,.25);border-radius:var(--radius-lg);padding:28px 32px;
+      margin-bottom:20px;display:flex;align-items:center;gap:20px}
+    .ai-icon{font-size:40px;flex-shrink:0}
+    .ai-hero h2{font-size:19px;font-weight:700;margin-bottom:4px}
+    .ai-hero p{color:var(--muted);font-size:13px;line-height:1.6}
+    .presets{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px}
+    .preset-btn{background:var(--surface);border:1px solid var(--border);border-radius:100px;
+      padding:5px 13px;font-size:12px;color:var(--muted);cursor:pointer;transition:all .2s;
+      font-family:'Space Grotesk',sans-serif}
+    .preset-btn:hover{border-color:var(--accent2);color:var(--text);background:rgba(124,58,237,.08)}
+    .q-box{display:flex;gap:10px;margin-bottom:16px}
+    .q-input{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:10px;
+      padding:13px 16px;font-size:14px;color:var(--text);font-family:'Space Grotesk',sans-serif;
+      resize:none;min-height:54px;transition:border-color .2s;outline:none}
+    .q-input:focus{border-color:var(--accent)}
+    .q-input::placeholder{color:var(--muted)}
+    .ask-btn{background:linear-gradient(135deg,var(--accent2),var(--accent));color:#fff;border:none;
+      border-radius:10px;padding:13px 22px;font-size:13px;font-weight:700;
+      font-family:'Space Grotesk',sans-serif;cursor:pointer;white-space:nowrap;align-self:flex-start;
+      transition:all .2s;display:flex;align-items:center;gap:7px}
+    .ask-btn:disabled{background:var(--surface2);color:var(--muted);cursor:not-allowed}
+    .ask-btn:not(:disabled):hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(124,58,237,.4)}
+    .auto-btn{width:100%;padding:14px;background:var(--surface);border:1px solid var(--border);
+      border-radius:12px;color:var(--text);font-size:13px;font-weight:600;
+      font-family:'Space Grotesk',sans-serif;cursor:pointer;display:flex;align-items:center;
+      justify-content:center;gap:10px;transition:all .2s;margin-bottom:16px}
+    .auto-btn:hover{border-color:var(--accent2);color:var(--accent)}
+    .ai-status{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:10px;margin-bottom:14px}
+    .spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);
+      border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .ai-resp{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+      padding:28px;font-size:14px;line-height:1.9;color:var(--muted);display:none;
+      max-height:720px;overflow-y:auto}
+    .ai-resp.show{display:block}
+    .ai-resp h1,.ai-resp h2,.ai-resp h3{color:var(--text);margin:20px 0 8px;font-size:15px;font-weight:700}
+    .ai-resp h2:first-child,.ai-resp h3:first-child{margin-top:0}
+    .ai-resp strong{color:var(--text)}
+    .ai-resp code{font-family:'JetBrains Mono',monospace;background:var(--surface2);padding:1px 5px;
+      border-radius:3px;font-size:11px;color:var(--accent)}
+    .ai-resp ul,.ai-resp ol{padding-left:22px;margin:8px 0}
+    .ai-resp li{margin-bottom:5px}
+    .ai-resp hr{border:none;border-top:1px solid var(--border);margin:16px 0}
+    .hist-item{background:var(--surface2);border:1px solid var(--border);border-radius:10px;
+      padding:14px 18px;margin-bottom:10px;cursor:pointer;transition:border-color .2s}
+    .hist-item:hover{border-color:var(--accent)}
+    .hist-q{font-size:12px;color:var(--accent);margin-bottom:4px;font-weight:600}
+    .hist-preview{font-size:12px;color:var(--muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  </style>
+</head>
+<body>
+<div id="navMount"></div>
+<div class="page-wrap">
+  <div class="page-header">
+    <div class="file-badge" id="fileBadge">📄 —</div>
+    <h1>✨ AI Security Analyst</h1>
+    <p>Ask Gemini AI anything about your network capture — threats, patterns, MITRE mapping, recommendations</p>
+  </div>
+
+  <div class="ai-hero">
+    <div class="ai-icon">🤖</div>
+    <div>
+      <h2>Powered by Gemini</h2>
+      <p>Full analysis context — statistics, anomaly results, threat indicators, packet sample — all passed to the AI for expert-level insights. Ctrl+Enter to submit.</p>
+    </div>
+  </div>
+
+  <button class="auto-btn" onclick="runAutoReport()">
+    <span>✨</span> Generate Full AI Security Report
+    <span style="font-size:11px;color:var(--muted);font-weight:400">(comprehensive analysis — no question needed)</span>
+  </button>
+
+  <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Or ask a specific question:</div>
+
+  <div class="presets">
+    <button class="preset-btn" onclick="setQ('What are the biggest security risks in this capture?')">Security risks</button>
+    <button class="preset-btn" onclick="setQ('Is this a port scan or DDoS? What evidence supports this?')">Scan/DDoS?</button>
+    <button class="preset-btn" onclick="setQ('Explain all anomalies in plain English for a non-technical manager')">Plain English</button>
+    <button class="preset-btn" onclick="setQ('Give a risk score from 0-100 with detailed justification')">Risk Score</button>
+    <button class="preset-btn" onclick="setQ('Map the threats to MITRE ATT&CK framework')">MITRE ATT&CK</button>
+    <button class="preset-btn" onclick="setQ('What should I block in my firewall based on this traffic?')">Firewall rules</button>
+    <button class="preset-btn" onclick="setQ('Is there evidence of lateral movement or data exfiltration?')">Lateral movement</button>
+    <button class="preset-btn" onclick="setQ('Is this traffic normal for a corporate LAN?')">Normal traffic?</button>
+    <button class="preset-btn" onclick="setQ('Summarize this for a security incident report')">Incident report</button>
+    <button class="preset-btn" onclick="setQ('What false positives might exist in the anomaly results?')">False positives</button>
+  </div>
+
+  <div class="q-box">
+    <textarea class="q-input" id="qInput" rows="2" placeholder="Ask anything about this network traffic…"></textarea>
+    <button class="ask-btn" id="askBtn" onclick="askAI()">
+      <span style="font-size:16px">✨</span> Ask AI
+    </button>
+  </div>
+
+  <div class="ai-status" id="aiStatus" style="display:none">
+    <div class="spinner"></div>
+    <span id="aiStatusText">Gemini AI is analysing your traffic…</span>
+  </div>
+
+  <div class="ai-resp" id="aiResp"></div>
+
+  <div id="histWrap" style="display:none;margin-top:24px">
+    <div class="section-title" style="margin-bottom:12px"><span class="dot"></span>Session History</div>
+    <div id="histList"></div>
+  </div>
+
+  <div style="display:flex;gap:12px;justify-content:space-between;margin-top:32px;border-top:1px solid var(--border);padding-top:24px">
+    <a href="result_packets.html" style="border:1px solid var(--border);color:var(--text);padding:10px 22px;border-radius:9px;font-weight:600;font-size:13px;text-decoration:none">← Packets</a>
+    <a href="result_overview.html" style="border:1px solid var(--border);color:var(--text);padding:10px 22px;border-radius:9px;font-weight:600;font-size:13px;text-decoration:none">Back to Overview</a>
+    <a href="upload.html" style="background:var(--accent);color:#000;padding:10px 26px;border-radius:9px;font-weight:700;font-size:13px;text-decoration:none">+ New Analysis</a>
+  </div>
+</div>
+
+<script src="nav.js"></script>
+<script>
+const API = "http://localhost:5000";
+
+const token = localStorage.getItem("ntdap_token");
+
+if (!token) {
+    window.location.href = "login.html";
+}
+document.getElementById("navMount").innerHTML = renderNav("ai");
+
+const data = getResult();
+if (data) document.getElementById("fileBadge").textContent = "📄 " + data.filename;
+
+const history = [];
+
+function setQ(q) {
+  document.getElementById("qInput").value = q;
+  document.getElementById("qInput").focus();
+}
+
+async function runAutoReport() { await askAI(""); }
+
+async function askAI(override) {
+  if (!data) return;
+  const question = override !== undefined ? override : document.getElementById("qInput").value.trim();
+  const btn = document.getElementById("askBtn");
+  const status = document.getElementById("aiStatus");
+  const resp   = document.getElementById("aiResp");
+
+  btn.disabled = true;
+  status.style.display = "flex";
+  document.getElementById("aiStatusText").textContent = question
+    ? "Analysing your question…"
+    : "Generating full security report…";
+  resp.classList.remove("show");
+
+  try {
+    const token = localStorage.getItem("ntdap_token");
+
+    const r = await fetch(API + "/ai-analyze", {
+  method:"POST",
+  headers:{
+    "Content-Type":"application/json",
+    "Authorization": `Bearer ${token}`
+  },
+      body: JSON.stringify({
+        statistics:     data.statistics,
+        anomalies:      data.anomalies,
+        interpretation: data.interpretation,
+        packet_sample:  data.packet_sample || [],
+        question
+      })
+    });
+    const json = await r.json();
+    status.style.display = "none";
+    btn.disabled = false;
+
+    if (!json.success) { showErr(json.error || "AI analysis failed."); return; }
+
+    resp.innerHTML = mdToHtml(json.analysis);
+    resp.classList.add("show");
+    resp.scrollIntoView({ behavior:"smooth", block:"nearest" });
+
+    if (question) {
+      history.unshift({ q: question, a: json.analysis });
+      renderHistory();
+    }
+    document.getElementById("qInput").value = "";
+
+  } catch(e) {
+    status.style.display = "none";
+    btn.disabled = false;
+    showErr("Cannot reach backend. Is Flask running on port 5000?");
+  }
+}
+
+function showErr(msg) {
+  const el = document.getElementById("aiResp");
+  el.innerHTML = `<div class="alert-card danger"><span class="alert-icon">⚠️</span><div class="alert-body">${msg}</div></div>`;
+  el.classList.add("show");
+}
+
+function mdToHtml(t) {
+  return t
+    .replace(/^### (.+)$/gm,"<h3>$1</h3>")
+    .replace(/^## (.+)$/gm,"<h2>$1</h2>")
+    .replace(/^# (.+)$/gm,"<h1>$1</h1>")
+    .replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g,"<em>$1</em>")
+    .replace(/`(.+?)`/g,"<code>$1</code>")
+    .replace(/^- (.+)$/gm,"<li>$1</li>")
+    .replace(/^(\d+)\. (.+)$/gm,"<li>$2</li>")
+    .replace(/---/g,"<hr/>")
+    .replace(/\n\n/g,"<br/><br/>")
+    .replace(/\n/g,"<br/>");
+}
+
+function renderHistory() {
+  if (!history.length) return;
+  document.getElementById("histWrap").style.display = "block";
+  document.getElementById("histList").innerHTML = history.map((h,i) => `
+    <div class="hist-item" onclick="showHistItem(${i})">
+      <div class="hist-q">Q: ${h.q || "(Full report)"}</div>
+      <div class="hist-preview">${h.a.substring(0,200)}…</div>
+    </div>`
+  ).join("");
+}
+
+function showHistItem(i) {
+  const el = document.getElementById("aiResp");
+  el.innerHTML = mdToHtml(history[i].a);
+  el.classList.add("show");
+  el.scrollIntoView({ behavior:"smooth", block:"nearest" });
+}
+
+document.getElementById("qInput").addEventListener("keydown", e => {
+  if (e.key === "Enter" && e.ctrlKey) { e.preventDefault(); askAI(); }
+});
+</script>
+</body></html>
