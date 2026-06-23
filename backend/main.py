@@ -3,8 +3,8 @@ import os, json, time, random, logging
 import requests
 
 
-from modules.auth import get_current_user, get_user_sessions
-from modules.db import save_session
+from .modules.auth import get_current_user, get_user_sessions
+from .modules.db import save_session
 
 
 from flask import Flask, request, jsonify, send_from_directory
@@ -12,18 +12,18 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
-from modules.parser      import parse_pcap
-from modules.cleaner     import clean_data
-from modules.eda         import analyze
-from modules.analyzer    import detect_anomalies
-from modules.visualizer  import generate_charts
-from modules.interpreter import interpret
-from modules.db          import (
+from .modules.parser      import parse_pcap
+from .modules.cleaner     import clean_data
+from .modules.eda         import analyze
+from .modules.analyzer    import detect_anomalies
+from .modules.visualizer  import generate_charts
+from .modules.interpreter import interpret
+from .modules.db          import (
     init_db, save_session, update_session_severity,
     get_session_packets, get_session_detail, get_threat_stats,
     get_connection
 )
-from modules.auth import (
+from .modules.auth import (
     init_auth_db,
     register_user, login_user, logout_user,
     get_current_user, require_auth, require_admin,
