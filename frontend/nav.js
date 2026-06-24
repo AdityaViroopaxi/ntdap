@@ -1,6 +1,6 @@
 // nav.js — NTDAP v4.0 shared navigation + utilities + auth
 
-const API_BASE = "http://localhost:5000";
+const API_BASE = "";
 
 function _getUser() {
   try { return JSON.parse(localStorage.getItem("ntdap_user") || "{}"); } catch { return {}; }
@@ -108,7 +108,7 @@ function requireLogin(redirect=true) {
 
 function requireAdmin() {
   if (!requireLogin()) return false;
-  if (_getUser().role !== "admin") { window.location.href = "upload.html"; return false; }
+  if (_getUser().role !== "admin") { window.location.href = "/upload-page"; return false; }
   return true;
 }
 

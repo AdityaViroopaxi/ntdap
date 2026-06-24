@@ -3,8 +3,6 @@ import os, json, time, random, logging
 import requests
 
 
-from .modules.auth import get_current_user, get_user_sessions
-from .modules.db import save_session
 
 
 from flask import Flask, request, jsonify, send_from_directory
@@ -62,28 +60,40 @@ def _get_token():
     return request.headers.get("X-Auth-Token", "")
 
 
+STATIC_FOLDER = os.path.join(os.path.dirname(__file__), "static")
 
+STATIC_FOLDER = os.path.join(os.path.dirname(__file__), "static")
 
 @app.route("/")
 def home():
-    return send_from_directory("static", "index.html")
+    return send_from_directory(STATIC_FOLDER, "index.html")
 
 @app.route("/login")
 def login_page():
-    return send_from_directory("static", "login.html")
+    return send_from_directory(STATIC_FOLDER, "login.html")
+
+@app.route("/register")
+def register_page():
+    return send_from_directory(STATIC_FOLDER, "register.html")
 
 @app.route("/upload-page")
 def upload_page():
-    return send_from_directory("static", "upload.html")
+    return send_from_directory(STATIC_FOLDER, "upload.html")
+
+@app.route("/dashboard")
+def dashboard_page():
+    return send_from_directory(STATIC_FOLDER, "dashboard.html")
+
+@app.route("/history-page")
+def history_page():
+    return send_from_directory(STATIC_FOLDER, "history.html")
 
 @app.route("/admin")
 def admin_page():
-    return send_from_directory("static", "admin.html")
+    return send_from_directory(STATIC_FOLDER, "admin.html")
 
 
-@app.route("/")
-def home():
-    return jsonify({"status": "NTDAP v4.0", "version": "4.0.0", "auth": True})
+
 
 
 # ── Auth ───────────────────────────────────────────────────────────

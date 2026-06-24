@@ -103,7 +103,7 @@
 </div>
 
 <script>
-const API = "http://localhost:5000";
+const API = "";
 let chosenFile = null;
 
 function ev(e, cls) { e.preventDefault(); document.getElementById("dropZone").className = "drop-zone " + cls; }
@@ -195,7 +195,7 @@ async function doUpload() {
 
   } catch(e) {
     clearInterval(interval);
-    showErr("Cannot connect to backend. Ensure Flask is running on http://localhost:5000");
+    showErr("Cannot connect to backend.");
     btn.disabled = false;
     btn.innerHTML = "<span>🚀</span> Analyse Traffic";
   }
