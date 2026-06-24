@@ -34,7 +34,11 @@ conf.manufdb = None
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 
 load_dotenv()
-app = Flask(__name__)
+app = Flask(
+    __name__,
+    static_folder="static",
+    static_url_path="/static"
+)
 CORS(app)
 
 UPLOAD_FOLDER  = os.path.join(os.path.dirname(__file__), "uploads")
@@ -62,36 +66,14 @@ def _get_token():
 
 STATIC_FOLDER = os.path.join(os.path.dirname(__file__), "static")
 
-STATIC_FOLDER = os.path.join(os.path.dirname(__file__), "static")
-
 @app.route("/")
 def home():
     return send_from_directory(STATIC_FOLDER, "index.html")
 
-@app.route("/login")
-def login_page():
-    return send_from_directory(STATIC_FOLDER, "login.html")
 
-@app.route("/register")
-def register_page():
-    return send_from_directory(STATIC_FOLDER, "register.html")
-
-@app.route("/upload-page")
-def upload_page():
-    return send_from_directory(STATIC_FOLDER, "upload.html")
-
-@app.route("/dashboard")
-def dashboard_page():
-    return send_from_directory(STATIC_FOLDER, "dashboard.html")
-
-@app.route("/history-page")
-def history_page():
-    return send_from_directory(STATIC_FOLDER, "history.html")
-
-@app.route("/admin")
-def admin_page():
-    return send_from_directory(STATIC_FOLDER, "admin.html")
-
+@app.route("/<path:filename>")
+def static_files(filename):
+    return send_from_directory(STATIC_FOLDER, filename)
 
 
 
