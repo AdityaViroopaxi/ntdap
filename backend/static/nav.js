@@ -108,7 +108,7 @@ function requireLogin(redirect=true) {
 
 function requireAdmin() {
   if (!requireLogin()) return false;
-  if (_getUser().role !== "admin") { window.location.href = "/upload-page"; return false; }
+  if (_getUser().role !== "admin") { window.location.href = "/upload.html"; return false; }
   return true;
 }
 
