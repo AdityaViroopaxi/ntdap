@@ -10,24 +10,23 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
-from .modules.parser      import parse_pcap
-from .modules.cleaner     import clean_data
-from .modules.eda         import analyze
-from .modules.analyzer    import detect_anomalies
-from .modules.visualizer  import generate_charts
+print("1")
+from .modules.parser import parse_pcap
+print("2")
+from .modules.cleaner import clean_data
+print("3")
+from .modules.eda import analyze
+print("4")
+from .modules.analyzer import detect_anomalies
+print("5")
+from .modules.visualizer import generate_charts
+print("6")
 from .modules.interpreter import interpret
-from .modules.db          import (
-    init_db, save_session, update_session_severity,
-    get_session_packets, get_session_detail, get_threat_stats,
-    get_connection
-)
-from .modules.auth import (
-    init_auth_db,
-    register_user, login_user, logout_user,
-    get_current_user, require_auth, require_admin,
-    get_user_sessions, get_all_users_admin, get_all_sessions_admin,
-    toggle_user_active, get_user_profile
-)
+print("7")
+from .modules.db import *
+print("8")
+from .modules.auth import *
+print("9")
 
 from scapy.config import conf
 conf.manufdb = None
@@ -53,7 +52,7 @@ ALLOWED_EXT    = {".pcap", ".pcapng", ".cap"}
 try:
     init_auth_db()
     init_db()
-    
+
 except Exception as e:
     print(f"⚠️  DB init: {e}")
 
