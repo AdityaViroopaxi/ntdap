@@ -29,7 +29,6 @@ def init_db():
 
     # ── sessions ──────────────────────────────────────────────────
     cur.execute("""
-                USE ntdap_db;
     CREATE TABLE IF NOT EXISTS capture_sessions (
         id INT AUTO_INCREMENT PRIMARY KEY,
 

@@ -51,8 +51,9 @@ print("Gemini key loaded:", bool(GEMINI_API_KEY))
 ALLOWED_EXT    = {".pcap", ".pcapng", ".cap"}
 
 try:
-    init_db()
     init_auth_db()
+    init_db()
+    
 except Exception as e:
     print(f"⚠️  DB init: {e}")
 

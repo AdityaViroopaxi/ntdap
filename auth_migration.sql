@@ -21,9 +21,8 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Add user_id to capture_sessions (nullable = legacy sessions kept)
 ALTER TABLE capture_sessions
-    ADD COLUMN IF NOT EXISTS user_id INT DEFAULT NULL,
-    ADD INDEX IF NOT EXISTS idx_user_id (user_id);
-
+    ADD COLUMN user_id INT DEFAULT NULL;,
+    ADD INDEX idx_user_id (user_id);
 ALTER TABLE capture_sessions
     ADD CONSTRAINT IF NOT EXISTS fk_session_user
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
