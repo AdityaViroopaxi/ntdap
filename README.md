@@ -5,7 +5,7 @@
 
 ## 1. Introduction
 
-NTDAP v4.0 (Network Traffic Detection and Analysis Platform) is a full-stack analytical system designed to process network packet capture (PCAP) files and generate structured insights using data processing, machine learning, and generative AI techniques.
+NTDAP v4.0 (Network Traffic Data Analysis Platform) is a full-stack analytical system designed to process network packet capture (PCAP) files and generate structured insights using data processing, machine learning, and generative AI techniques.
 
 The system focuses on transforming low-level packet-level binary data into high-level, actionable intelligence that can assist in identifying network behavior, detecting anomalies, and supporting cybersecurity analysis. By integrating multiple layers of processing, authentication, persistence, and AI analysis, NTDAP significantly reduces the complexity involved in interpreting raw network traffic.
 
